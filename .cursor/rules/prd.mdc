@@ -1,0 +1,1666 @@
+---
+alwaysApply: false
+---
+# Product Requirements Document (PRD)
+# AI-Powered Algorithmic Trading System
+
+**Wersja:** 1.0  
+**Data:** 2025-01-13  
+**Autor:** Marcin / AI Assistant  
+**Status:** Draft  
+
+---
+
+## Spis treści
+
+1. [Executive Summary](#1-executive-summary)
+2. [Problem Statement](#2-problem-statement)
+3. [Goals & Objectives](#3-goals--objectives)
+4. [User Personas](#4-user-personas)
+5. [User Stories](#5-user-stories)
+6. [Functional Requirements](#6-functional-requirements)
+7. [Non-Functional Requirements](#7-non-functional-requirements)
+8. [System Architecture](#8-system-architecture)
+9. [Data Model](#9-data-model)
+10. [API Specification](#10-api-specification)
+11. [UI/UX Requirements](#11-uiux-requirements)
+12. [Security Requirements](#12-security-requirements)
+13. [Success Metrics](#13-success-metrics)
+14. [Risks & Mitigations](#14-risks--mitigations)
+15. [Timeline & Roadmap](#15-timeline--roadmap)
+16. [Out of Scope](#16-out-of-scope)
+17. [Dependencies](#17-dependencies)
+18. [Glossary](#18-glossary)
+
+---
+
+## 1. Executive Summary
+
+### 1.1 Opis produktu
+
+AI Trading System to zaawansowana platforma do algorytmicznego handlu kryptowalutami, która łączy tradycyjne podejście do backtestingu z możliwościami sztucznej inteligencji. System umożliwia użytkownikom tworzenie, testowanie i uruchamianie strategii tradingowych poprzez naturalny język (chat z AI) oraz tradycyjny interfejs konfiguracyjny.
+
+### 1.2 Kluczowe wyróżniki
+
+| Cecha | Opis |
+|-------|------|
+| **AI-First** | Tworzenie strategii poprzez rozmowę z agentem AI |
+| **Single Source of Truth** | Jedna definicja strategii dla backtestu i live tradingu |
+| **Determinizm** | Gwarancja identycznych wyników backtestu i rzeczywistego handlu |
+| **Full TypeScript** | Spójny stack technologiczny (Angular + NestJS + Nx) |
+
+### 1.3 Target Market
+
+- Indywidualni traderzy kryptowalut (retail)
+- Zaawansowani użytkownicy szukający automatyzacji
+- Programiści chcący budować strategie bez głębokiej wiedzy tradingowej
+
+### 1.4 Business Model
+
+- **MVP**: Użytek własny / proof of concept
+- **Future**: SaaS z subskrypcją miesięczną (tiers based on features)
+
+---
+
+## 2. Problem Statement
+
+### 2.1 Obecne problemy na rynku
+
+| Problem | Opis | Impact |
+|---------|------|--------|
+| **Rozbieżność Backtest/Live** | Większość platform ma różne silniki dla backtestu i live tradingu, co prowadzi do rozbieżności wyników | Strategie zyskowne w backteście nie działają na żywo |
+| **Wysoki próg wejścia** | Tworzenie strategii wymaga znajomości programowania i analizy technicznej | Wykluczenie większości potencjalnych użytkowników |
+| **Brak inteligentnej optymalizacji** | Optymalizacja parametrów to żmudny, manualny proces | Suboptymalne strategie, overfitting |
+| **Fragmentacja narzędzi** | Różne narzędzia do backtestu, analizy, live tradingu | Nieefektywny workflow, błędy przy migracji |
+
+### 2.2 Konsekwencje dla użytkowników
+
+```
+Trader chce stworzyć strategię
+        │
+        ▼
+┌─────────────────────────────────────────────────────────┐
+│ 1. Musi nauczyć się programowania (Pine Script, Python) │
+│ 2. Musi zrozumieć platformę backtestową                 │
+│ 3. Ręcznie optymalizuje parametry (czasochłonne)        │
+│ 4. Przenosi strategię do bota tradingowego              │
+│ 5. Odkrywa, że wyniki różnią się od backtestu           │
+│ 6. Wraca do punktu 1...                                 │
+└─────────────────────────────────────────────────────────┘
+```
+
+### 2.3 Nasza propozycja wartości
+
+> **"Opisz strategię słowami, przetestuj, uruchom - wszystko w jednym miejscu, z gwarancją spójności wyników."**
+
+---
+
+## 3. Goals & Objectives
+
+### 3.1 Business Goals
+
+| Goal | Metric | Target (MVP) | Target (1 Year) |
+|------|--------|--------------|-----------------|
+| Walidacja konceptu | Działający system | ✓ | - |
+| Zyskowność strategii | Monthly Return | >3% | >5% |
+| Redukcja czasu tworzenia strategii | Time to first backtest | <10 min | <5 min |
+
+### 3.2 Product Goals
+
+| Goal | Description | Success Criteria |
+|------|-------------|------------------|
+| **G1** | Umożliwić tworzenie strategii przez AI | Użytkownik może stworzyć działającą strategię poprzez chat |
+| **G2** | Zapewnić spójność backtest/live | 100% identycznych sygnałów przy tych samych danych |
+| **G3** | Dostarczyć wiarygodny backtest | Metryki zgodne ze standardami branżowymi |
+| **G4** | Umożliwić automatyczny trading | System wykonuje zlecenia 24/7 bez interwencji |
+| **G5** | Wspierać optymalizację AI | AI sugeruje i testuje ulepszenia strategii |
+
+### 3.3 User Goals
+
+| Persona | Goal | Feature |
+|---------|------|---------|
+| Trader | Szybko przetestować pomysł | AI Strategy Generator |
+| Trader | Nie martwić się o rozbieżności | SSOT Architecture |
+| Developer | Rozszerzać system o własne wskaźniki | Plugin System |
+| Investor | Pasywny dochód | Automated Trading |
+
+---
+
+## 4. User Personas
+
+### 4.1 Persona 1: "Marcin" - Technical Trader
+
+```
+┌─────────────────────────────────────────────────────────┐
+│ MARCIN, 35 lat                                          │
+│ Director of IT / Hobby Trader                           │
+├─────────────────────────────────────────────────────────┤
+│ Background:                                             │
+│ • Programista z 10+ lat doświadczenia                   │
+│ • Traduje krypto od 3 lat                               │
+│ • Używał TradingView, 3Commas, własnych botów           │
+│                                                         │
+│ Goals:                                                  │
+│ • Zautomatyzować trading żeby nie siedzieć przy wykresie│
+│ • Mieć pełną kontrolę nad logiką strategii              │
+│ • Testować pomysły szybko przed ryzykowaniem kapitału   │
+│                                                         │
+│ Frustrations:                                           │
+│ • Strategie działają inaczej na live niż w backteście   │
+│ • Ręczna optymalizacja parametrów jest żmudna           │
+│ • Istniejące boty są "black box"                        │
+│                                                         │
+│ Tech Savviness: ████████░░ 8/10                         │
+│ Trading Experience: ██████░░░░ 6/10                     │
+│ Risk Tolerance: ██████░░░░ 6/10                         │
+└─────────────────────────────────────────────────────────┘
+```
+
+### 4.2 Persona 2: "Anna" - Aspiring Trader
+
+```
+┌─────────────────────────────────────────────────────────┐
+│ ANNA, 28 lat                                            │
+│ Marketing Manager / Beginner Trader                     │
+├─────────────────────────────────────────────────────────┤
+│ Background:                                             │
+│ • Nie programuje                                        │
+│ • Traduje krypto od 6 miesięcy (manualnie)              │
+│ • Oglądała kursy o analizie technicznej                 │
+│                                                         │
+│ Goals:                                                  │
+│ • Nauczyć się tradingu bez straty kapitału              │
+│ • Zautomatyzować proste strategie                       │
+│ • Zrozumieć dlaczego strategia działa lub nie           │
+│                                                         │
+│ Frustrations:                                           │
+│ • Platformy wymagają programowania                      │
+│ • Nie wie czy jej pomysły mają sens                     │
+│ • Boi się stracić pieniądze na testowanie               │
+│                                                         │
+│ Tech Savviness: ████░░░░░░ 4/10                         │
+│ Trading Experience: ███░░░░░░░ 3/10                     │
+│ Risk Tolerance: ████░░░░░░ 4/10                         │
+└─────────────────────────────────────────────────────────┘
+```
+
+### 4.3 Persona 3: "Piotr" - Quant Developer
+
+```
+┌─────────────────────────────────────────────────────────┐
+│ PIOTR, 32 lata                                          │
+│ Quantitative Developer                                  │
+├─────────────────────────────────────────────────────────┤
+│ Background:                                             │
+│ • Senior developer (Python, TypeScript)                 │
+│ • Pracował w fintech                                    │
+│ • Buduje własne systemy tradingowe                      │
+│                                                         │
+│ Goals:                                                  │
+│ • Platforma do szybkiego prototypowania                 │
+│ • Możliwość dodawania własnych wskaźników               │
+│ • API do integracji z własnymi narzędziami              │
+│                                                         │
+│ Frustrations:                                           │
+│ • Istniejące platformy są zbyt ograniczające            │
+│ • Brak dostępu do kodu źródłowego                       │
+│ • Słaba dokumentacja API                                │
+│                                                         │
+│ Tech Savviness: ██████████ 10/10                        │
+│ Trading Experience: ████████░░ 8/10                     │
+│ Risk Tolerance: ████████░░ 8/10                         │
+└─────────────────────────────────────────────────────────┘
+```
+
+---
+
+## 5. User Stories
+
+### 5.1 Epic 1: Strategy Creation
+
+| ID | User Story | Priority | Acceptance Criteria |
+|----|------------|----------|---------------------|
+| US-101 | Jako trader, chcę opisać strategię w naturalnym języku, aby nie musieć programować | P0 | AI generuje valid StrategySchema z opisu |
+| US-102 | Jako trader, chcę modyfikować strategię przez chat, aby szybko iterować | P0 | Modyfikacja zachowuje poprzednie ustawienia |
+| US-103 | Jako developer, chcę edytować strategię w formie YAML/JSON, aby mieć pełną kontrolę | P1 | Editor z walidacją i podpowiedziami |
+| US-104 | Jako trader, chcę zapisać strategię, aby móc do niej wrócić później | P0 | CRUD operacje na strategiach |
+| US-105 | Jako trader, chcę wersjonować strategie, aby śledzić zmiany | P2 | Git-like versioning z diff view |
+
+#### US-101 Detail: AI Strategy Generation
+
+```gherkin
+Feature: AI Strategy Generation
+  As a trader
+  I want to describe a strategy in natural language
+  So that I can create trading strategies without coding
+
+  Scenario: Create simple MA crossover strategy
+    Given I am on the Strategy Builder page
+    When I type "Stwórz strategię opartą na przecięciu EMA 9 i EMA 21. 
+         Wejście long gdy szybka przecina wolną od dołu. 
+         Stop loss 2% poniżej wejścia."
+    And I click "Generate"
+    Then the system should create a valid strategy with:
+      | indicator    | EMA period 9  |
+      | indicator    | EMA period 21 |
+      | entry_long   | EMA9 crosses above EMA21 |
+      | stop_loss    | 2% below entry |
+    And I should see the strategy preview
+    And I should be able to run backtest
+
+  Scenario: Modify existing strategy
+    Given I have a strategy "MA Crossover v1"
+    When I type "Dodaj filtr RSI - wejście tylko gdy RSI < 70"
+    Then the strategy should be updated with RSI condition
+    And the original MA conditions should remain unchanged
+
+  Scenario: Handle ambiguous request
+    Given I am on the Strategy Builder page
+    When I type "Stwórz dobrą strategię na BTC"
+    Then AI should ask clarifying questions:
+      | "Jaki timeframe preferujesz?" |
+      | "Jakie wskaźniki chcesz wykorzystać?" |
+      | "Jaki jest Twój apetyt na ryzyko?" |
+```
+
+### 5.2 Epic 2: Backtesting
+
+| ID | User Story | Priority | Acceptance Criteria |
+|----|------------|----------|---------------------|
+| US-201 | Jako trader, chcę uruchomić backtest strategii, aby sprawdzić jej skuteczność | P0 | Backtest na danych historycznych z metrykami |
+| US-202 | Jako trader, chcę zobaczyć wykres equity, aby wizualizować wyniki | P0 | Interaktywny chart z equity curve |
+| US-203 | Jako trader, chcę zobaczyć listę transakcji, aby analizować szczegóły | P0 | Tabela z wszystkimi trade'ami |
+| US-204 | Jako trader, chcę porównać różne wersje strategii, aby wybrać najlepszą | P1 | Side-by-side comparison |
+| US-205 | Jako developer, chcę eksportować wyniki, aby analizować je zewnętrznie | P2 | Export do CSV/JSON |
+
+#### US-201 Detail: Run Backtest
+
+```gherkin
+Feature: Backtest Execution
+  As a trader
+  I want to run a backtest on my strategy
+  So that I can evaluate its historical performance
+
+  Scenario: Run successful backtest
+    Given I have a valid strategy "Pivot SMMA v3"
+    And historical data is available for BTCUSDT from 2023-01-01 to 2025-01-01
+    When I configure backtest with:
+      | initial_capital | 10000 |
+      | commission      | 0.06% |
+      | slippage        | 0.03% |
+    And I click "Run Backtest"
+    Then the system should process all candles
+    And display progress indicator
+    And show results within 30 seconds
+    And display metrics:
+      | Total Trades    |
+      | Win Rate        |
+      | Profit Factor   |
+      | Max Drawdown    |
+      | Sharpe Ratio    |
+      | Total Return    |
+
+  Scenario: Backtest with insufficient data
+    Given I have a strategy requiring 200 periods lookback
+    And only 100 candles are available
+    Then the system should show error:
+      "Insufficient data. Required: 200 candles, Available: 100"
+```
+
+### 5.3 Epic 3: AI Optimization
+
+| ID | User Story | Priority | Acceptance Criteria |
+|----|------------|----------|---------------------|
+| US-301 | Jako trader, chcę aby AI zoptymalizowała parametry, aby poprawić wyniki | P1 | AI znajduje lepsze parametry |
+| US-302 | Jako trader, chcę ustawić cele optymalizacji, aby kontrolować proces | P1 | Konfigurowalne objectives |
+| US-303 | Jako trader, chcę widzieć postęp optymalizacji, aby wiedzieć ile trwa | P1 | Progress bar z ETA |
+| US-304 | Jako trader, chcę porównać przed/po optymalizacji, aby ocenić improvement | P1 | Comparison table |
+
+### 5.4 Epic 4: Live Trading
+
+| ID | User Story | Priority | Acceptance Criteria |
+|----|------------|----------|---------------------|
+| US-401 | Jako trader, chcę połączyć konto Bybit, aby handlować na żywo | P0 | OAuth lub API key connection |
+| US-402 | Jako trader, chcę uruchomić strategię live, aby automatycznie handlować | P0 | Bot wykonuje zlecenia |
+| US-403 | Jako trader, chcę monitorować pozycje, aby wiedzieć co się dzieje | P0 | Real-time position display |
+| US-404 | Jako trader, chcę zatrzymać bota, aby przestać handlować | P0 | Stop button z graceful shutdown |
+| US-405 | Jako trader, chcę ustawić limity ryzyka, aby chronić kapitał | P0 | Max daily loss, max position size |
+| US-406 | Jako trader, chcę otrzymywać powiadomienia, aby być informowanym o zdarzeniach | P1 | Email/Discord/Telegram alerts |
+
+#### US-402 Detail: Start Live Trading
+
+```gherkin
+Feature: Live Trading Execution
+  As a trader
+  I want to start automated trading
+  So that the system trades on my behalf 24/7
+
+  Scenario: Start live trading successfully
+    Given I have a backtested strategy "Pivot SMMA v3"
+    And my Bybit account is connected
+    And I have sufficient balance (> $1000)
+    When I configure live trading:
+      | symbol          | BTCUSDT |
+      | max_position    | 5% of capital |
+      | risk_per_trade  | 2% |
+      | max_daily_loss  | 5% |
+    And I click "Start Live Trading"
+    And I confirm the risk disclaimer
+    Then the system should:
+      | Start monitoring price data |
+      | Display "Running" status |
+      | Show current position (if any) |
+      | Log all activities |
+
+  Scenario: Emergency stop
+    Given live trading is running
+    When I click "Emergency Stop"
+    Then the system should:
+      | Cancel all pending orders |
+      | Close all open positions (market order) |
+      | Stop the trading loop |
+      | Send notification to user |
+```
+
+### 5.5 Epic 5: Analytics & Reporting
+
+| ID | User Story | Priority | Acceptance Criteria |
+|----|------------|----------|---------------------|
+| US-501 | Jako trader, chcę dashboard z wynikami, aby śledzić performance | P1 | Dashboard z key metrics |
+| US-502 | Jako trader, chcę historię wszystkich transakcji, aby analizować | P1 | Searchable trade history |
+| US-503 | Jako trader, chcę raporty dzienne/tygodniowe, aby podsumować wyniki | P2 | Automated reports |
+
+---
+
+## 6. Functional Requirements
+
+### 6.1 Strategy Management Module
+
+#### FR-1.1: Strategy Schema Definition
+
+```typescript
+interface StrategySchema {
+  // Metadata
+  id: string;                    // UUID
+  version: string;               // Semantic versioning (e.g., "1.0.0")
+  name: string;                  // Human-readable name
+  description: string;           // Strategy description
+  createdAt: Date;
+  updatedAt: Date;
+  
+  // Data Requirements
+  dataRequirements: {
+    primaryTimeframe: Timeframe;         // e.g., "4h"
+    additionalTimeframes: Timeframe[];   // e.g., ["1d"]
+    lookbackPeriods: number;             // e.g., 200
+    symbols: string[];                   // e.g., ["BTCUSDT"]
+  };
+  
+  // Indicators
+  indicators: IndicatorDefinition[];
+  
+  // Computed Variables
+  computedVariables: ComputedVariable[];
+  
+  // Entry/Exit Logic
+  entrySignals: {
+    long: SignalDefinition;
+    short: SignalDefinition;
+  };
+  exitSignals: ExitSignalDefinition;
+  
+  // Risk Management
+  riskManagement: RiskManagementConfig;
+  
+  // Optimization Hints (for AI)
+  optimizationHints?: OptimizationHints;
+}
+```
+
+#### FR-1.2: Strategy CRUD Operations
+
+| Operation | Endpoint | Description |
+|-----------|----------|-------------|
+| Create | `POST /api/strategies` | Create new strategy |
+| Read | `GET /api/strategies/:id` | Get strategy by ID |
+| Update | `PUT /api/strategies/:id` | Update existing strategy |
+| Delete | `DELETE /api/strategies/:id` | Soft delete strategy |
+| List | `GET /api/strategies` | List all user's strategies |
+| Clone | `POST /api/strategies/:id/clone` | Clone strategy |
+| Export | `GET /api/strategies/:id/export` | Export as YAML/JSON |
+| Import | `POST /api/strategies/import` | Import from YAML/JSON |
+
+#### FR-1.3: Strategy Validation
+
+System MUSI walidować strategię przed zapisem:
+
+| Validation | Rule |
+|------------|------|
+| Schema | Zgodność z JSON Schema |
+| Indicators | Wszystkie referencje do wskaźników istnieją w registry |
+| Conditions | Wszystkie warunki mają poprawną składnię |
+| Risk | Stop loss i take profit są zdefiniowane |
+| Symbols | Symbole są dostępne na wybranej giełdzie |
+
+### 6.2 Indicator Module
+
+#### FR-2.1: Built-in Indicators
+
+| Indicator | Parameters | Output |
+|-----------|------------|--------|
+| SMA | period, source | Single value |
+| EMA | period, source | Single value |
+| SMMA | period, source | Single value |
+| RSI | period, source | 0-100 |
+| ATR | period | Absolute value |
+| ADX | period | 0-100 |
+| MACD | fast, slow, signal | {macd, signal, histogram} |
+| Bollinger | period, stdDev | {upper, middle, lower} |
+| Stochastic | kPeriod, dPeriod, smooth | {k, d} |
+| Pivot Points | method (traditional/fibonacci/camarilla) | {PP, R1-R3, S1-S3} |
+| Volume SMA | period | Single value |
+| OBV | - | Single value |
+
+#### FR-2.2: Custom Indicator Registration
+
+```typescript
+interface IIndicator {
+  name: string;
+  description: string;
+  parameters: ParameterDefinition[];
+  requiredPeriods: number;
+  
+  calculate(data: OHLCV[], params: Record<string, any>): IndicatorResult;
+  validate(params: Record<string, any>): ValidationResult;
+}
+
+// Registration
+indicatorRegistry.register('MY_CUSTOM_INDICATOR', MyCustomIndicator);
+```
+
+### 6.3 Condition Evaluator Module
+
+#### FR-3.1: Condition Types
+
+| Type | Parameters | Example |
+|------|------------|---------|
+| `greater_than` | left, right | `RSI > 70` |
+| `less_than` | left, right | `RSI < 30` |
+| `equals` | left, right | `trend == "UP"` |
+| `not_equals` | left, right | `trend != "NEUTRAL"` |
+| `between` | value, min, max | `0.8 < ATR% < 4.5` |
+| `crosses_above` | fast, slow | `EMA9 crosses above EMA21` |
+| `crosses_below` | fast, slow | `EMA9 crosses below EMA21` |
+| `pivot_touch` | levels, direction, tolerance | Price touches S1 and bounces |
+| `time_filter` | start, end, timezone | Only trade 8:00-20:00 UTC |
+| `day_filter` | days | Only trade Mon-Fri |
+
+#### FR-3.2: Condition Composition
+
+```yaml
+# AND - wszystkie warunki muszą być spełnione
+conditions:
+  - type: greater_than
+    left: rsi
+    right: 30
+  - type: less_than
+    left: rsi
+    right: 70
+
+# OR - użycie grupy
+conditionGroups:
+  - operator: OR
+    conditions:
+      - { type: pivot_touch, levels: ["S1"] }
+      - { type: pivot_touch, levels: ["S2"] }
+```
+
+### 6.4 Backtest Engine Module
+
+#### FR-4.1: Backtest Configuration
+
+```typescript
+interface BacktestConfig {
+  // Time Range
+  startDate: Date;
+  endDate: Date;
+  
+  // Capital
+  initialCapital: number;      // e.g., 10000
+  currency: string;            // e.g., "USDT"
+  
+  // Costs
+  commissionPct: number;       // e.g., 0.0006 (0.06%)
+  slippagePct: number;         // e.g., 0.0003 (0.03%)
+  
+  // Execution
+  fillModel: 'optimistic' | 'pessimistic' | 'realistic';
+  
+  // Data
+  dataSource: 'local' | 'exchange';
+}
+```
+
+#### FR-4.2: Backtest Output Metrics
+
+| Category | Metric | Formula |
+|----------|--------|---------|
+| **Returns** | Total Return | `(Final - Initial) / Initial` |
+| | CAGR | `(Final/Initial)^(1/years) - 1` |
+| | Monthly Avg | `mean(monthly_returns)` |
+| **Risk** | Max Drawdown | `max(peak - trough) / peak` |
+| | Sharpe Ratio | `(return - rf) / std(returns)` |
+| | Sortino Ratio | `(return - rf) / std(negative_returns)` |
+| | Calmar Ratio | `CAGR / Max Drawdown` |
+| **Trading** | Win Rate | `wins / total_trades` |
+| | Profit Factor | `gross_profit / gross_loss` |
+| | Avg Win | `mean(winning_trades)` |
+| | Avg Loss | `mean(losing_trades)` |
+| | Avg Trade | `mean(all_trades)` |
+| | Max Consecutive Wins | - |
+| | Max Consecutive Losses | - |
+| **Exposure** | Total Trades | count |
+| | Long/Short Ratio | `long_trades / short_trades` |
+| | Avg Holding Time | `mean(exit_time - entry_time)` |
+| | Time in Market | `total_position_time / total_time` |
+
+### 6.5 Live Trading Module
+
+#### FR-5.1: Exchange Integration
+
+```typescript
+interface IExchangeClient {
+  // Connection
+  connect(): Promise<void>;
+  disconnect(): Promise<void>;
+  isConnected(): boolean;
+  
+  // Market Data
+  getCandles(symbol: string, timeframe: string, limit?: number): Promise<OHLCV[]>;
+  subscribeTicker(symbol: string, callback: TickerCallback): void;
+  
+  // Trading
+  placeOrder(params: OrderParams): Promise<Order>;
+  cancelOrder(orderId: string): Promise<void>;
+  getOrder(orderId: string): Promise<Order>;
+  
+  // Positions
+  getPosition(symbol: string): Promise<Position | null>;
+  getPositions(): Promise<Position[]>;
+  closePosition(symbol: string): Promise<Order>;
+  
+  // Account
+  getBalance(): Promise<Balance>;
+  setLeverage(symbol: string, leverage: number): Promise<void>;
+}
+```
+
+#### FR-5.2: Safety Limits
+
+| Limit | Default | Configurable |
+|-------|---------|--------------|
+| Max Position Size | 10% of capital | Yes |
+| Max Leverage | 5x | Yes |
+| Max Daily Loss | 5% | Yes |
+| Max Open Positions | 1 | Yes |
+| Min Balance to Trade | $100 | Yes |
+| Max Slippage | 0.5% | Yes |
+
+#### FR-5.3: Order Types Support
+
+| Order Type | Supported | Notes |
+|------------|-----------|-------|
+| Market | ✅ | Primary for entries |
+| Limit | ✅ | For precise entries |
+| Stop Market | ✅ | For stop loss |
+| Take Profit | ✅ | For TP levels |
+| Trailing Stop | ✅ | Dynamic SL |
+
+### 6.6 AI Module
+
+#### FR-6.1: Strategy Generation
+
+| Capability | Description |
+|------------|-------------|
+| Parse Intent | Zrozumienie co użytkownik chce osiągnąć |
+| Generate Schema | Utworzenie valid StrategySchema |
+| Explain | Wyjaśnienie co zostało stworzone |
+| Suggest | Sugestie ulepszeń |
+| Validate | Sprawdzenie czy strategia ma sens |
+
+#### FR-6.2: Optimization
+
+| Capability | Description |
+|------------|-------------|
+| Parameter Tuning | Optymalizacja wartości parametrów |
+| Feature Selection | Wybór najlepszych wskaźników |
+| Walk-Forward | Walidacja out-of-sample |
+| Overfitting Detection | Ostrzeżenia o overfittingu |
+
+#### FR-6.3: Analysis
+
+| Capability | Description |
+|------------|-------------|
+| Performance Analysis | Interpretacja wyników backtestu |
+| Weakness Detection | Identyfikacja słabych punktów strategii |
+| Market Regime Analysis | Kiedy strategia działa najlepiej |
+| Improvement Suggestions | Konkretne sugestie ulepszeń |
+
+---
+
+## 7. Non-Functional Requirements
+
+### 7.1 Performance
+
+| Requirement | Target | Measurement |
+|-------------|--------|-------------|
+| **NFR-P1** | Backtest 1 rok danych 4H (2190 świec) | < 5 sekund |
+| **NFR-P2** | Backtest 5 lat danych 4H (10950 świec) | < 30 sekund |
+| **NFR-P3** | Live signal latency (od nowej świecy do decyzji) | < 500ms |
+| **NFR-P4** | Order execution latency (od decyzji do złożenia) | < 200ms |
+| **NFR-P5** | API response time (95th percentile) | < 200ms |
+| **NFR-P6** | WebSocket message latency | < 100ms |
+| **NFR-P7** | UI initial load time | < 3 sekund |
+| **NFR-P8** | AI response time (strategy generation) | < 30 sekund |
+
+### 7.2 Scalability
+
+| Requirement | Target |
+|-------------|--------|
+| **NFR-S1** | Concurrent users | 100 (MVP), 10,000 (production) |
+| **NFR-S2** | Concurrent backtests | 10 per user |
+| **NFR-S3** | Concurrent live bots | 5 per user |
+| **NFR-S4** | Historical data storage | 5 years per symbol |
+| **NFR-S5** | Strategies per user | Unlimited |
+
+### 7.3 Availability
+
+| Requirement | Target |
+|-------------|--------|
+| **NFR-A1** | System uptime | 99.9% (excl. maintenance) |
+| **NFR-A2** | Live trading uptime | 99.99% |
+| **NFR-A3** | Planned maintenance window | Sunday 02:00-04:00 UTC |
+| **NFR-A4** | Recovery Time Objective (RTO) | < 15 minutes |
+| **NFR-A5** | Recovery Point Objective (RPO) | < 5 minutes |
+
+### 7.4 Security
+
+| Requirement | Description |
+|-------------|-------------|
+| **NFR-SEC1** | API keys encrypted at rest (AES-256) |
+| **NFR-SEC2** | All traffic over HTTPS/WSS |
+| **NFR-SEC3** | JWT authentication with refresh tokens |
+| **NFR-SEC4** | API rate limiting (100 req/min per user) |
+| **NFR-SEC5** | Audit log of all sensitive operations |
+| **NFR-SEC6** | No API keys in logs or error messages |
+| **NFR-SEC7** | OWASP Top 10 compliance |
+
+### 7.5 Reliability
+
+| Requirement | Description |
+|-------------|-------------|
+| **NFR-R1** | Deterministic execution (same input = same output) |
+| **NFR-R2** | Graceful degradation (AI unavailable → manual mode) |
+| **NFR-R3** | Automatic reconnection to exchange |
+| **NFR-R4** | Transaction integrity (no partial states) |
+| **NFR-R5** | Data consistency between services |
+
+### 7.6 Usability
+
+| Requirement | Description |
+|-------------|-------------|
+| **NFR-U1** | Mobile-responsive design |
+| **NFR-U2** | Keyboard shortcuts for power users |
+| **NFR-U3** | Dark/Light theme |
+| **NFR-U4** | i18n ready (English, Polish) |
+| **NFR-U5** | Accessibility (WCAG 2.1 AA) |
+
+### 7.7 Maintainability
+
+| Requirement | Description |
+|-------------|-------------|
+| **NFR-M1** | Code coverage > 80% |
+| **NFR-M2** | Documentation for all public APIs |
+| **NFR-M3** | Automated CI/CD pipeline |
+| **NFR-M4** | Feature flags for gradual rollout |
+| **NFR-M5** | Structured logging (JSON format) |
+
+---
+
+## 8. System Architecture
+
+### 8.1 High-Level Architecture
+
+```
+┌─────────────────────────────────────────────────────────────────────────┐
+│                              CLIENTS                                    │
+│  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐  ┌───────────────┐  │
+│  │ Web App     │  │ Mobile App  │  │ CLI         │  │ External API  │  │
+│  │ (Angular)   │  │ (Future)    │  │ (Future)    │  │ Consumers     │  │
+│  └──────┬──────┘  └──────┬──────┘  └──────┬──────┘  └───────┬───────┘  │
+└─────────┼────────────────┼────────────────┼─────────────────┼──────────┘
+          │                │                │                 │
+          └────────────────┴────────┬───────┴─────────────────┘
+                                    │ HTTPS / WSS
+                                    ▼
+┌─────────────────────────────────────────────────────────────────────────┐
+│                           LOAD BALANCER                                 │
+│                          (nginx / cloud LB)                             │
+└────────────────────────────────┬────────────────────────────────────────┘
+                                 │
+          ┌──────────────────────┼──────────────────────┐
+          │                      │                      │
+          ▼                      ▼                      ▼
+┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
+│   API Server    │    │   API Server    │    │   API Server    │
+│   (NestJS)      │    │   (NestJS)      │    │   (NestJS)      │
+│   Instance 1    │    │   Instance 2    │    │   Instance N    │
+└────────┬────────┘    └────────┬────────┘    └────────┬────────┘
+         │                      │                      │
+         └──────────────────────┼──────────────────────┘
+                                │
+         ┌──────────────────────┼──────────────────────┐
+         │                      │                      │
+         ▼                      ▼                      ▼
+┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
+│   PostgreSQL    │    │     Redis       │    │   Worker Pool   │
+│   (Primary +    │    │   (Cache +      │    │   (BullMQ)      │
+│    Replicas)    │    │    Pub/Sub)     │    │                 │
+└─────────────────┘    └─────────────────┘    └────────┬────────┘
+                                                       │
+                       ┌───────────────────────────────┤
+                       │                               │
+                       ▼                               ▼
+              ┌─────────────────┐            ┌─────────────────┐
+              │ Backtest Worker │            │ Trading Worker  │
+              │ (CPU Intensive) │            │ (I/O Intensive) │
+              └─────────────────┘            └────────┬────────┘
+                                                      │
+                                                      ▼
+                                             ┌─────────────────┐
+                                             │ Exchange APIs   │
+                                             │ (Bybit, etc.)   │
+                                             └─────────────────┘
+```
+
+### 8.2 Module Architecture
+
+```
+┌─────────────────────────────────────────────────────────────────────────┐
+│                           NestJS Application                            │
+├─────────────────────────────────────────────────────────────────────────┤
+│                                                                         │
+│  ┌─────────────────────────────────────────────────────────────────┐   │
+│  │                      API Layer (Controllers)                     │   │
+│  │  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐           │   │
+│  │  │Strategy  │ │Backtest  │ │Trading   │ │AI        │           │   │
+│  │  │Controller│ │Controller│ │Controller│ │Controller│           │   │
+│  │  └────┬─────┘ └────┬─────┘ └────┬─────┘ └────┬─────┘           │   │
+│  └───────┼────────────┼────────────┼────────────┼──────────────────┘   │
+│          │            │            │            │                       │
+│  ┌───────┼────────────┼────────────┼────────────┼──────────────────┐   │
+│  │       │     Service Layer (Business Logic)   │                  │   │
+│  │  ┌────▼─────┐ ┌────▼─────┐ ┌────▼─────┐ ┌────▼─────┐           │   │
+│  │  │Strategy  │ │Backtest  │ │Trading   │ │AI        │           │   │
+│  │  │Service   │ │Service   │ │Service   │ │Service   │           │   │
+│  │  └────┬─────┘ └────┬─────┘ └────┬─────┘ └────┬─────┘           │   │
+│  └───────┼────────────┼────────────┼────────────┼──────────────────┘   │
+│          │            │            │            │                       │
+│  ┌───────┴────────────┴────────────┴────────────┴──────────────────┐   │
+│  │                    Core Layer (@trading/core)                    │   │
+│  │  ┌──────────────┐ ┌──────────────┐ ┌──────────────┐             │   │
+│  │  │ Strategy     │ │ Indicator    │ │ Risk         │             │   │
+│  │  │ Executor     │ │ Registry     │ │ Calculator   │             │   │
+│  │  └──────────────┘ └──────────────┘ └──────────────┘             │   │
+│  │  ┌──────────────┐ ┌──────────────┐ ┌──────────────┐             │   │
+│  │  │ Condition    │ │ Signal       │ │ Variable     │             │   │
+│  │  │ Evaluator    │ │ Generator    │ │ Computer     │             │   │
+│  │  └──────────────┘ └──────────────┘ └──────────────┘             │   │
+│  └─────────────────────────────────────────────────────────────────┘   │
+│                                                                         │
+│  ┌─────────────────────────────────────────────────────────────────┐   │
+│  │                  Infrastructure Layer                            │   │
+│  │  ┌──────────────┐ ┌──────────────┐ ┌──────────────┐             │   │
+│  │  │ TypeORM      │ │ Redis        │ │ Exchange     │             │   │
+│  │  │ Repositories │ │ Cache        │ │ Clients      │             │   │
+│  │  └──────────────┘ └──────────────┘ └──────────────┘             │   │
+│  └─────────────────────────────────────────────────────────────────┘   │
+│                                                                         │
+└─────────────────────────────────────────────────────────────────────────┘
+```
+
+### 8.3 Data Flow
+
+```
+┌─────────────────────────────────────────────────────────────────────────┐
+│                    STRATEGY CREATION FLOW                               │
+├─────────────────────────────────────────────────────────────────────────┤
+│                                                                         │
+│  User Input ──► AI Service ──► Strategy Generator ──► Schema Validator │
+│       │              │                │                     │           │
+│       │              │                │                     │           │
+│       │              ▼                ▼                     ▼           │
+│       │         Claude API    StrategySchema           Validation       │
+│       │                             │                    Result         │
+│       │                             │                     │             │
+│       │                             ▼                     │             │
+│       │                      Strategy Service ◄───────────┘             │
+│       │                             │                                   │
+│       │                             ▼                                   │
+│       └─────────────────────► Database (Save)                           │
+│                                                                         │
+└─────────────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────────────┐
+│                       BACKTEST EXECUTION FLOW                           │
+├─────────────────────────────────────────────────────────────────────────┤
+│                                                                         │
+│  Strategy ──► Backtest Service ──► Load Historical Data                 │
+│                     │                      │                            │
+│                     │                      ▼                            │
+│                     │              For each candle:                     │
+│                     │                      │                            │
+│                     │     ┌────────────────┴────────────────┐           │
+│                     │     │                                 │           │
+│                     │     ▼                                 │           │
+│                     │  Strategy Executor                    │           │
+│                     │     │                                 │           │
+│                     │     ├─► Calculate Indicators          │           │
+│                     │     ├─► Compute Variables             │           │
+│                     │     ├─► Evaluate Conditions           │           │
+│                     │     ├─► Generate Signals              │           │
+│                     │     │                                 │           │
+│                     │     ▼                                 │           │
+│                     │  Market Simulator                     │           │
+│                     │     │                                 │           │
+│                     │     ├─► Simulate Execution            │           │
+│                     │     ├─► Apply Slippage/Commission     │           │
+│                     │     ├─► Update Portfolio              │           │
+│                     │     │                                 │           │
+│                     │     └────────────────┬────────────────┘           │
+│                     │                      │                            │
+│                     │                      ▼                            │
+│                     │              Metrics Calculator                   │
+│                     │                      │                            │
+│                     ▼                      ▼                            │
+│              BacktestResult ◄──── Trades + Equity Curve                 │
+│                                                                         │
+└─────────────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────────────┐
+│                       LIVE TRADING FLOW                                 │
+├─────────────────────────────────────────────────────────────────────────┤
+│                                                                         │
+│                         ┌──────────────────────────────┐                │
+│                         │     Trading Loop (24/7)      │                │
+│                         └──────────────┬───────────────┘                │
+│                                        │                                │
+│  ┌─────────────────────────────────────┼────────────────────────────┐   │
+│  │                                     ▼                            │   │
+│  │  Wait for new candle ──► Fetch Latest Data ──► Strategy Executor │   │
+│  │         ▲                                            │           │   │
+│  │         │                                            │           │   │
+│  │         │    ┌───────────────────────────────────────┘           │   │
+│  │         │    │                                                   │   │
+│  │         │    ▼                                                   │   │
+│  │         │  Signals? ──NO──► Continue Loop                        │   │
+│  │         │    │                    │                              │   │
+│  │         │   YES                   │                              │   │
+│  │         │    │                    │                              │   │
+│  │         │    ▼                    │                              │   │
+│  │         │  Risk Calculator        │                              │   │
+│  │         │    │                    │                              │   │
+│  │         │    ▼                    │                              │   │
+│  │         │  Order Manager ──► Exchange API                        │   │
+│  │         │    │                    │                              │   │
+│  │         │    ▼                    │                              │   │
+│  │         │  Position Manager       │                              │   │
+│  │         │    │                    │                              │   │
+│  │         │    ▼                    │                              │   │
+│  │         └─ Emit Events (WS) ──────┘                              │   │
+│  │                                                                  │   │
+│  └──────────────────────────────────────────────────────────────────┘   │
+│                                                                         │
+└─────────────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## 9. Data Model
+
+### 9.1 Entity Relationship Diagram
+
+```
+┌──────────────────┐       ┌──────────────────┐       ┌──────────────────┐
+│      User        │       │    Strategy      │       │ StrategyVersion  │
+├──────────────────┤       ├──────────────────┤       ├──────────────────┤
+│ id (PK)          │───┐   │ id (PK)          │───┐   │ id (PK)          │
+│ email            │   │   │ userId (FK)      │◄──┘   │ strategyId (FK)  │◄──┘
+│ passwordHash     │   │   │ name             │       │ version          │
+│ createdAt        │   │   │ description      │       │ schema (JSONB)   │
+│ updatedAt        │   │   │ currentVersion   │       │ createdAt        │
+└──────────────────┘   │   │ status           │       │ changelog        │
+                       │   │ createdAt        │       └──────────────────┘
+                       │   │ updatedAt        │
+                       │   └──────────────────┘
+                       │            │
+                       │            │
+                       │   ┌────────┴─────────┐
+                       │   │                  │
+                       │   ▼                  ▼
+┌──────────────────┐   │ ┌──────────────────┐ ┌──────────────────┐
+│   ExchangeKey    │   │ │    Backtest      │ │   TradingBot     │
+├──────────────────┤   │ ├──────────────────┤ ├──────────────────┤
+│ id (PK)          │   │ │ id (PK)          │ │ id (PK)          │
+│ userId (FK)      │◄──┘ │ strategyId (FK)  │ │ strategyId (FK)  │
+│ exchange         │     │ versionId (FK)   │ │ userId (FK)      │
+│ apiKeyEncrypted  │     │ config (JSONB)   │ │ exchangeKeyId(FK)│
+│ apiSecretEncrypt │     │ status           │ │ status           │
+│ testnet          │     │ startedAt        │ │ config (JSONB)   │
+│ createdAt        │     │ completedAt      │ │ startedAt        │
+└──────────────────┘     │ results (JSONB)  │ │ stoppedAt        │
+                         │ error            │ └──────────────────┘
+                         └──────────────────┘          │
+                                  │                    │
+                                  │                    │
+                                  ▼                    ▼
+                         ┌──────────────────┐ ┌──────────────────┐
+                         │ BacktestTrade    │ │     Trade        │
+                         ├──────────────────┤ ├──────────────────┤
+                         │ id (PK)          │ │ id (PK)          │
+                         │ backtestId (FK)  │ │ botId (FK)       │
+                         │ entryTime        │ │ symbol           │
+                         │ exitTime         │ │ side             │
+                         │ side             │ │ entryPrice       │
+                         │ entryPrice       │ │ exitPrice        │
+                         │ exitPrice        │ │ size             │
+                         │ size             │ │ pnl              │
+                         │ pnl              │ │ commission       │
+                         │ commission       │ │ entryTime        │
+                         │ exitReason       │ │ exitTime         │
+                         └──────────────────┘ │ status           │
+                                              │ exchangeOrderIds │
+                                              └──────────────────┘
+
+┌──────────────────────────────────────────────────────────────────────────┐
+│                         TimescaleDB (Time-series)                        │
+├──────────────────────────────────────────────────────────────────────────┤
+│                                                                          │
+│  ┌──────────────────┐    ┌──────────────────┐    ┌──────────────────┐   │
+│  │     OHLCV        │    │   EquityCurve    │    │    BotLogs       │   │
+│  ├──────────────────┤    ├──────────────────┤    ├──────────────────┤   │
+│  │ time (PK)        │    │ time (PK)        │    │ time (PK)        │   │
+│  │ symbol (PK)      │    │ backtestId (PK)  │    │ botId (PK)       │   │
+│  │ timeframe (PK)   │    │ equity           │    │ level            │   │
+│  │ open             │    │ drawdown         │    │ message          │   │
+│  │ high             │    │ openPositions    │    │ metadata (JSONB) │   │
+│  │ low              │    └──────────────────┘    └──────────────────┘   │
+│  │ close            │                                                   │
+│  │ volume           │                                                   │
+│  └──────────────────┘                                                   │
+│                                                                          │
+└──────────────────────────────────────────────────────────────────────────┘
+```
+
+### 9.2 Key Entities Detail
+
+#### Strategy Entity
+
+```typescript
+@Entity('strategies')
+export class Strategy {
+  @PrimaryGeneratedColumn('uuid')
+  id: string;
+
+  @ManyToOne(() => User)
+  @JoinColumn()
+  user: User;
+
+  @Column()
+  name: string;
+
+  @Column({ nullable: true })
+  description: string;
+
+  @Column({ default: '1.0.0' })
+  currentVersion: string;
+
+  @Column({ type: 'enum', enum: StrategyStatus, default: 'draft' })
+  status: StrategyStatus;
+
+  @OneToMany(() => StrategyVersion, version => version.strategy)
+  versions: StrategyVersion[];
+
+  @OneToMany(() => Backtest, backtest => backtest.strategy)
+  backtests: Backtest[];
+
+  @OneToMany(() => TradingBot, bot => bot.strategy)
+  bots: TradingBot[];
+
+  @CreateDateColumn()
+  createdAt: Date;
+
+  @UpdateDateColumn()
+  updatedAt: Date;
+
+  @DeleteDateColumn()
+  deletedAt: Date;
+}
+
+export enum StrategyStatus {
+  DRAFT = 'draft',
+  TESTING = 'testing',
+  LIVE = 'live',
+  ARCHIVED = 'archived',
+}
+```
+
+#### StrategyVersion Entity (JSONB Schema)
+
+```typescript
+@Entity('strategy_versions')
+export class StrategyVersion {
+  @PrimaryGeneratedColumn('uuid')
+  id: string;
+
+  @ManyToOne(() => Strategy)
+  @JoinColumn()
+  strategy: Strategy;
+
+  @Column()
+  version: string;  // Semantic versioning
+
+  @Column({ type: 'jsonb' })
+  schema: StrategySchema;  // Full strategy definition
+
+  @Column({ nullable: true })
+  changelog: string;
+
+  @CreateDateColumn()
+  createdAt: Date;
+}
+```
+
+---
+
+## 10. API Specification
+
+### 10.1 REST API Endpoints
+
+#### Authentication
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/api/auth/register` | Register new user |
+| POST | `/api/auth/login` | Login, returns JWT |
+| POST | `/api/auth/refresh` | Refresh access token |
+| POST | `/api/auth/logout` | Invalidate refresh token |
+
+#### Strategies
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/strategies` | List user's strategies |
+| POST | `/api/strategies` | Create new strategy |
+| GET | `/api/strategies/:id` | Get strategy details |
+| PUT | `/api/strategies/:id` | Update strategy |
+| DELETE | `/api/strategies/:id` | Delete strategy |
+| POST | `/api/strategies/:id/clone` | Clone strategy |
+| GET | `/api/strategies/:id/versions` | List versions |
+| GET | `/api/strategies/:id/export` | Export as YAML |
+| POST | `/api/strategies/import` | Import from YAML |
+| POST | `/api/strategies/validate` | Validate schema |
+
+#### Backtests
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/backtests` | List user's backtests |
+| POST | `/api/backtests` | Start new backtest |
+| GET | `/api/backtests/:id` | Get backtest results |
+| DELETE | `/api/backtests/:id` | Delete backtest |
+| GET | `/api/backtests/:id/trades` | Get backtest trades |
+| GET | `/api/backtests/:id/equity` | Get equity curve |
+
+#### Live Trading
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/bots` | List trading bots |
+| POST | `/api/bots` | Create new bot |
+| GET | `/api/bots/:id` | Get bot status |
+| POST | `/api/bots/:id/start` | Start bot |
+| POST | `/api/bots/:id/stop` | Stop bot |
+| POST | `/api/bots/:id/emergency-stop` | Emergency stop |
+| GET | `/api/bots/:id/trades` | Get bot trades |
+| GET | `/api/bots/:id/logs` | Get bot logs |
+
+#### AI
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/api/ai/generate` | Generate strategy from prompt |
+| POST | `/api/ai/modify` | Modify existing strategy |
+| POST | `/api/ai/optimize` | Start optimization |
+| GET | `/api/ai/optimize/:id` | Get optimization status |
+| POST | `/api/ai/analyze` | Analyze backtest results |
+
+#### Exchange
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/exchanges` | List supported exchanges |
+| GET | `/api/exchanges/keys` | List user's API keys |
+| POST | `/api/exchanges/keys` | Add API key |
+| DELETE | `/api/exchanges/keys/:id` | Remove API key |
+| POST | `/api/exchanges/keys/:id/test` | Test API key |
+
+### 10.2 WebSocket Events
+
+#### Client → Server
+
+```typescript
+// Subscribe to bot updates
+{ event: 'subscribe:bot', data: { botId: string } }
+
+// Unsubscribe
+{ event: 'unsubscribe:bot', data: { botId: string } }
+
+// Subscribe to backtest progress
+{ event: 'subscribe:backtest', data: { backtestId: string } }
+```
+
+#### Server → Client
+
+```typescript
+// Bot status update
+{ event: 'bot:status', data: { botId, status, position, equity } }
+
+// New trade
+{ event: 'bot:trade', data: { botId, trade: Trade } }
+
+// Bot error
+{ event: 'bot:error', data: { botId, error: string } }
+
+// Backtest progress
+{ event: 'backtest:progress', data: { backtestId, progress: number, eta: number } }
+
+// Backtest complete
+{ event: 'backtest:complete', data: { backtestId, results: BacktestResult } }
+```
+
+### 10.3 API Response Format
+
+```typescript
+// Success response
+{
+  "success": true,
+  "data": { ... },
+  "meta": {
+    "timestamp": "2025-01-13T12:00:00Z",
+    "requestId": "req_abc123"
+  }
+}
+
+// Error response
+{
+  "success": false,
+  "error": {
+    "code": "VALIDATION_ERROR",
+    "message": "Invalid strategy schema",
+    "details": [
+      { "field": "indicators[0].period", "message": "must be positive" }
+    ]
+  },
+  "meta": {
+    "timestamp": "2025-01-13T12:00:00Z",
+    "requestId": "req_abc123"
+  }
+}
+
+// Paginated response
+{
+  "success": true,
+  "data": [...],
+  "pagination": {
+    "page": 1,
+    "pageSize": 20,
+    "totalItems": 156,
+    "totalPages": 8
+  }
+}
+```
+
+---
+
+## 11. UI/UX Requirements
+
+### 11.1 Information Architecture
+
+```
+┌─────────────────────────────────────────────────────────────────────────┐
+│                           NAVIGATION                                    │
+├─────────────────────────────────────────────────────────────────────────┤
+│                                                                         │
+│  Dashboard ──┬── Strategies ──┬── Strategy Builder                      │
+│              │                ├── Strategy List                         │
+│              │                └── Strategy Detail                       │
+│              │                                                          │
+│              ├── Backtests ───┬── Backtest List                         │
+│              │                └── Backtest Results                      │
+│              │                                                          │
+│              ├── Live Trading ┬── Bot List                              │
+│              │                ├── Bot Monitor                           │
+│              │                └── Trade History                         │
+│              │                                                          │
+│              ├── Analytics ───┬── Performance                           │
+│              │                └── Reports                               │
+│              │                                                          │
+│              └── Settings ────┬── Profile                               │
+│                               ├── API Keys                              │
+│                               └── Notifications                         │
+│                                                                         │
+└─────────────────────────────────────────────────────────────────────────┘
+```
+
+### 11.2 Key Screens
+
+#### Screen 1: Strategy Builder
+
+```
+┌─────────────────────────────────────────────────────────────────────────┐
+│ Strategy Builder                                          [Save] [Run]  │
+├─────────────────────────────────────────────────────────────────────────┤
+│                                                                         │
+│  ┌─────────────────────────────┐  ┌─────────────────────────────────┐  │
+│  │        AI CHAT              │  │       STRATEGY PREVIEW          │  │
+│  │                             │  │                                 │  │
+│  │  [User]: Stwórz strategię   │  │  Name: Pivot SMMA v3            │  │
+│  │  na odbiciach od pivotów    │  │  Version: 1.0.0                 │  │
+│  │  z filtrem trendu SMMA      │  │                                 │  │
+│  │                             │  │  ┌─────────────────────────┐    │  │
+│  │  [AI]: Tworzę strategię...  │  │  │ INDICATORS              │    │  │
+│  │                             │  │  │ • SMMA(33) - 4H         │    │  │
+│  │  ✅ Dodaję wskaźniki:       │  │  │ • SMMA(144) - 4H        │    │  │
+│  │  • SMMA(33) i SMMA(144)     │  │  │ • Pivot Points          │    │  │
+│  │  • Pivot Points             │  │  │ • RSI(14)               │    │  │
+│  │                             │  │  │ • ATR(14)               │    │  │
+│  │  ✅ Warunki wejścia LONG... │  │  └─────────────────────────┘    │  │
+│  │                             │  │                                 │  │
+│  │  [Run Backtest?]            │  │  ┌─────────────────────────┐    │  │
+│  │                             │  │  │ ENTRY CONDITIONS        │    │  │
+│  │  ┌───────────────────────┐  │  │  │ LONG:                   │    │  │
+│  │  │ Type your message...  │  │  │  │ • Trend UP (SMMA)       │    │  │
+│  │  └───────────────────────┘  │  │  │ • Price bounced S1/S2   │    │  │
+│  │                             │  │  │ • RSI < 70              │    │  │
+│  └─────────────────────────────┘  │  └─────────────────────────┘    │  │
+│                                   │                                 │  │
+│                                   │  ┌─────────────────────────┐    │  │
+│                                   │  │ RISK MANAGEMENT         │    │  │
+│                                   │  │ • SL: 2.0 ATR           │    │  │
+│                                   │  │ • TP: 3.5 ATR           │    │  │
+│                                   │  │ • Risk/Trade: 2%        │    │  │
+│                                   │  └─────────────────────────┘    │  │
+│                                   │                                 │  │
+│                                   └─────────────────────────────────┘  │
+│                                                                         │
+└─────────────────────────────────────────────────────────────────────────┘
+```
+
+#### Screen 2: Backtest Results
+
+```
+┌─────────────────────────────────────────────────────────────────────────┐
+│ Backtest Results: Pivot SMMA v3                    [Compare] [Optimize] │
+├─────────────────────────────────────────────────────────────────────────┤
+│                                                                         │
+│  Period: 2023-01-01 to 2025-01-01 │ Initial: $10,000 │ Final: $24,230  │
+│                                                                         │
+│  ┌──────────────────────────────────────────────────────────────────┐  │
+│  │                       EQUITY CURVE                               │  │
+│  │                                                                  │  │
+│  │    $25k ─┤                                          ╱──╱         │  │
+│  │          │                                      ╱──╱             │  │
+│  │    $20k ─┤                              ╱──────╱                  │  │
+│  │          │                          ╱──╱                         │  │
+│  │    $15k ─┤                    ╱────╱                              │  │
+│  │          │               ╱───╱                                   │  │
+│  │    $10k ─┼──────────────╱                                        │  │
+│  │          │                                                       │  │
+│  │          └────────┬─────────┬─────────┬─────────┬─────────┬────  │  │
+│  │                 2023      2023.5     2024      2024.5    2025    │  │
+│  └──────────────────────────────────────────────────────────────────┘  │
+│                                                                         │
+│  ┌────────────────────────────┐  ┌────────────────────────────────┐   │
+│  │      KEY METRICS           │  │      TRADE DISTRIBUTION         │   │
+│  │                            │  │                                  │   │
+│  │  Total Return    +142.3%   │  │  ████████████░░░ Long: 85       │   │
+│  │  Win Rate        58.5%     │  │  ██████████░░░░░ Short: 62      │   │
+│  │  Profit Factor   2.34      │  │                                  │   │
+│  │  Sharpe Ratio    1.87      │  │  Winners: 86 (58.5%)            │   │
+│  │  Max Drawdown    -8.2%     │  │  Losers:  61 (41.5%)            │   │
+│  │  Total Trades    147       │  │                                  │   │
+│  │  Avg Trade       +0.97%    │  │  Avg Win:  +2.8%                │   │
+│  │  Avg Holding     18.5h     │  │  Avg Loss: -1.2%                │   │
+│  └────────────────────────────┘  └────────────────────────────────┘   │
+│                                                                         │
+│  ┌──────────────────────────────────────────────────────────────────┐  │
+│  │ TRADES                                      [Export CSV] [Filter] │  │
+│  ├────────┬────────┬────────┬────────┬────────┬────────┬───────────┤  │
+│  │ # │Date     │Side │Entry   │Exit    │P&L    │Duration│           │  │
+│  ├────────┼────────┼────────┼────────┼────────┼────────┼───────────┤  │
+│  │ 1 │Jan 15   │LONG │42,150  │43,890  │+4.1%  │24h     │           │  │
+│  │ 2 │Jan 22   │SHORT│44,200  │43,100  │+2.5%  │12h     │           │  │
+│  │ 3 │Feb 03   │LONG │41,800  │41,200  │-1.4%  │8h      │           │  │
+│  │...│...      │...  │...     │...     │...    │...     │           │  │
+│  └──────────────────────────────────────────────────────────────────┘  │
+│                                                                         │
+└─────────────────────────────────────────────────────────────────────────┘
+```
+
+#### Screen 3: Live Trading Monitor
+
+```
+┌─────────────────────────────────────────────────────────────────────────┐
+│ Live Trading: Pivot SMMA v3                   [Stop] [Emergency Stop]   │
+├─────────────────────────────────────────────────────────────────────────┤
+│                                                                         │
+│  Status: 🟢 RUNNING │ Uptime: 3d 14h │ Exchange: Bybit (Mainnet)       │
+│                                                                         │
+│  ┌────────────────────────────┐  ┌────────────────────────────────┐   │
+│  │     CURRENT POSITION       │  │         ACCOUNT                 │   │
+│  │                            │  │                                  │   │
+│  │  Symbol:    BTCUSDT        │  │  Balance:     $12,450           │   │
+│  │  Side:      LONG           │  │  Available:   $8,200            │   │
+│  │  Size:      0.15 BTC       │  │  In Position: $4,250            │   │
+│  │  Entry:     $94,250        │  │                                  │   │
+│  │  Current:   $95,100        │  │  Today P&L:   +$180 (+1.4%)     │   │
+│  │  P&L:       +$127 (+0.9%)  │  │  Week P&L:    +$850 (+7.3%)     │   │
+│  │                            │  │  Month P&L:   +$2,100 (+20.3%)  │   │
+│  │  SL: $93,200 (-1.1%)       │  │                                  │   │
+│  │  TP: $97,500 (+3.4%)       │  │                                  │   │
+│  └────────────────────────────┘  └────────────────────────────────┘   │
+│                                                                         │
+│  ┌──────────────────────────────────────────────────────────────────┐  │
+│  │                          PRICE CHART                             │  │
+│  │  [TradingView Chart with entry/exit markers]                     │  │
+│  │                                                                  │  │
+│  │                                                                  │  │
+│  │                                                                  │  │
+│  └──────────────────────────────────────────────────────────────────┘  │
+│                                                                         │
+│  ┌──────────────────────────────────────────────────────────────────┐  │
+│  │ ACTIVITY LOG                                             [Clear] │  │
+│  ├──────────────────────────────────────────────────────────────────┤  │
+│  │ 14:32:15 │ INFO  │ New 4H candle received                       │  │
+│  │ 14:32:15 │ INFO  │ Evaluating entry conditions...               │  │
+│  │ 14:32:16 │ INFO  │ No signal generated                          │  │
+│  │ 10:00:05 │ TRADE │ LONG entry @ $94,250 (0.15 BTC)              │  │
+│  │ 10:00:05 │ INFO  │ SL set @ $93,200, TP @ $97,500               │  │
+│  └──────────────────────────────────────────────────────────────────┘  │
+│                                                                         │
+└─────────────────────────────────────────────────────────────────────────┘
+```
+
+### 11.3 UI Components Library
+
+| Component | Description | Usage |
+|-----------|-------------|-------|
+| `StrategyCard` | Preview card for strategy | Strategy list |
+| `MetricsTable` | Key-value metrics display | Backtest results |
+| `EquityChart` | Line chart for equity curve | Backtest, Live |
+| `TradeTable` | Paginated trade list | Backtest, Trade history |
+| `ChatMessage` | AI/User message bubble | Strategy builder |
+| `StatusBadge` | Status indicator | Bots, Backtests |
+| `PositionPanel` | Current position display | Live trading |
+| `LogViewer` | Real-time log stream | Live trading |
+
+---
+
+## 12. Security Requirements
+
+### 12.1 Authentication & Authorization
+
+| Requirement | Implementation |
+|-------------|----------------|
+| User Authentication | JWT with RS256 signing |
+| Token Expiry | Access: 15 min, Refresh: 7 days |
+| Password Policy | Min 8 chars, 1 uppercase, 1 number, 1 special |
+| Rate Limiting | 100 req/min per user, 1000 req/min per IP |
+| Session Management | Redis-backed sessions |
+| 2FA | TOTP (Google Authenticator) - optional |
+
+### 12.2 Data Security
+
+| Data Type | Protection |
+|-----------|------------|
+| API Keys | AES-256 encryption at rest |
+| Passwords | bcrypt with salt (rounds=12) |
+| Strategy Schemas | Encrypted at rest (per-user key) |
+| Backtest Results | Encrypted at rest |
+| Logs | PII redaction, 90-day retention |
+
+### 12.3 API Security
+
+| Measure | Description |
+|---------|-------------|
+| HTTPS Only | TLS 1.3, HSTS enabled |
+| CORS | Whitelist specific origins |
+| Input Validation | Zod schemas on all endpoints |
+| SQL Injection | TypeORM parameterized queries |
+| XSS Prevention | Angular sanitization, CSP headers |
+| CSRF | SameSite cookies, CSRF tokens |
+
+### 12.4 Exchange Integration Security
+
+| Measure | Description |
+|---------|-------------|
+| API Key Storage | HSM or KMS-backed encryption |
+| IP Whitelisting | Encourage users to whitelist server IPs |
+| Permission Scoping | Only request necessary permissions |
+| Key Rotation | Remind users every 90 days |
+| Audit Trail | Log all exchange API calls |
+
+---
+
+## 13. Success Metrics
+
+### 13.1 Product Metrics
+
+| Metric | Definition | Target (MVP) | Target (6mo) |
+|--------|------------|--------------|--------------|
+| **Strategy Creation Time** | Time from start to first backtest | <15 min | <5 min |
+| **Backtest Accuracy** | Correlation backtest vs paper trading | N/A | >95% |
+| **AI Generation Success** | % of valid strategies from AI | >70% | >90% |
+| **Live Trading Uptime** | % time bots are operational | 99% | 99.9% |
+
+### 13.2 User Engagement Metrics
+
+| Metric | Definition | Target (MVP) | Target (6mo) |
+|--------|------------|--------------|--------------|
+| **DAU** | Daily Active Users | 1 (self) | 100 |
+| **Strategies Created** | Total strategies per user | 5 | 20 |
+| **Backtests Run** | Backtests per strategy | 10 | 50 |
+| **Live Bot Activation** | % users with active bot | 100% | 30% |
+
+### 13.3 Business Metrics
+
+| Metric | Definition | Target (MVP) | Target (1yr) |
+|--------|------------|--------------|--------------|
+| **Strategy Profitability** | % of strategies profitable (backtest) | 30% | 40% |
+| **Live Trading Return** | Avg monthly return of live bots | >3% | >5% |
+| **Max Drawdown** | Worst drawdown across all bots | <15% | <10% |
+
+---
+
+## 14. Risks & Mitigations
+
+### 14.1 Technical Risks
+
+| Risk | Probability | Impact | Mitigation |
+|------|-------------|--------|------------|
+| Exchange API downtime | Medium | High | Multi-exchange support, graceful degradation |
+| Data feed inconsistency | Medium | High | Multiple data sources, validation |
+| Backtest/Live divergence | Low | Critical | Shared executor, extensive testing |
+| AI hallucinations | Medium | Medium | Schema validation, human review |
+| Security breach | Low | Critical | Security audit, encryption, monitoring |
+
+### 14.2 Business Risks
+
+| Risk | Probability | Impact | Mitigation |
+|------|-------------|--------|------------|
+| Strategy losses | High | High | Risk limits, paper trading first |
+| Regulatory changes | Medium | High | Monitor regulations, geo-restrictions |
+| API cost overruns (AI) | Medium | Medium | Caching, rate limiting, cost monitoring |
+| Competition | Medium | Low | Focus on UX and AI differentiation |
+
+### 14.3 Operational Risks
+
+| Risk | Probability | Impact | Mitigation |
+|------|-------------|--------|------------|
+| Server failure | Low | High | Multi-AZ deployment, auto-scaling |
+| Database corruption | Low | Critical | Regular backups, replication |
+| Key compromise | Low | Critical | HSM, rotation, monitoring |
+
+---
+
+## 15. Timeline & Roadmap
+
+### 15.1 MVP Timeline (28 weeks)
+
+```
+┌─────────────────────────────────────────────────────────────────────────┐
+│                           MVP ROADMAP                                   │
+├─────────────────────────────────────────────────────────────────────────┤
+│                                                                         │
+│ PHASE 1: Foundation (Weeks 1-6)                                        │
+│ ├─ Week 1-2: Project setup, Nx monorepo, CI/CD                         │
+│ ├─ Week 3-4: @trading/core library (indicators, executor)              │
+│ └─ Week 5-6: Strategy schema, validator, basic tests                   │
+│                                                                         │
+│ PHASE 2: Backtest Engine (Weeks 7-10)                                  │
+│ ├─ Week 7-8: Backtest engine, market simulator                         │
+│ └─ Week 9-10: Metrics calculator, CLI interface                        │
+│                                                                         │
+│ PHASE 3: API Backend (Weeks 11-14)                                     │
+│ ├─ Week 11-12: NestJS setup, auth, database                            │
+│ └─ Week 13-14: Strategy CRUD, backtest endpoints                       │
+│                                                                         │
+│ PHASE 4: AI Integration (Weeks 15-18)                                  │
+│ ├─ Week 15-16: Claude integration, strategy generator                  │
+│ └─ Week 17-18: Optimization agent, analysis agent                      │
+│                                                                         │
+│ PHASE 5: Frontend (Weeks 19-24)                                        │
+│ ├─ Week 19-20: Angular setup, routing, auth                            │
+│ ├─ Week 21-22: Strategy builder, AI chat                               │
+│ └─ Week 23-24: Backtest dashboard, charts                              │
+│                                                                         │
+│ PHASE 6: Live Trading (Weeks 25-28)                                    │
+│ ├─ Week 25-26: Bybit integration, order manager                        │
+│ └─ Week 27-28: Live trading UI, monitoring, testing                    │
+│                                                                         │
+│ ══════════════════════════════════════════════════════════════════════ │
+│                         MVP COMPLETE                                    │
+└─────────────────────────────────────────────────────────────────────────┘
+```
+
+### 15.2 Post-MVP Roadmap
+
+| Phase | Timeline | Features |
+|-------|----------|----------|
+| **v1.1** | MVP + 4 weeks | Multi-exchange (Binance), mobile responsive |
+| **v1.2** | MVP + 8 weeks | Advanced analytics, portfolio mode |
+| **v2.0** | MVP + 16 weeks | Social features, strategy marketplace |
+| **v3.0** | MVP + 24 weeks | Options trading, DeFi integration |
+
+---
+
+## 16. Out of Scope (MVP)
+
+| Feature | Reason | Future Version |
+|---------|--------|----------------|
+| Mobile native app | Complexity | v2.0 |
+| Multiple exchanges | MVP simplicity | v1.1 |
+| Options trading | Different logic | v3.0 |
+| Social/Marketplace | Not core | v2.0 |
+| Spot trading | Focus on futures | v1.2 |
+| Portfolio management | Single strategy first | v1.2 |
+| Copy trading | Requires user base | v2.0 |
+| Tax reporting | Complexity | v2.0 |
+
+---
+
+## 17. Dependencies
+
+### 17.1 External Services
+
+| Service | Purpose | Criticality |
+|---------|---------|-------------|
+| Bybit API | Trading, market data | Critical |
+| Anthropic Claude | AI features | High |
+| AWS/GCP | Infrastructure | Critical |
+| SendGrid | Email notifications | Medium |
+| Discord/Telegram | Alert notifications | Low |
+
+### 17.2 Third-Party Libraries
+
+| Library | Purpose | License |
+|---------|---------|---------|
+| NestJS | Backend framework | MIT |
+| Angular | Frontend framework | MIT |
+| TypeORM | Database ORM | MIT |
+| ccxt | Exchange connectivity | MIT |
+| technicalindicators | TA library | MIT |
+| lightweight-charts | Charts | Apache 2.0 |
+| BullMQ | Job queue | MIT |
+
+---
+
+## 18. Glossary
+
+| Term | Definition |
+|------|------------|
+| **ATR** | Average True Range - volatility indicator |
+| **Backtest** | Simulation of strategy on historical data |
+| **Drawdown** | Peak-to-trough decline in equity |
+| **Equity Curve** | Chart showing account value over time |
+| **Leverage** | Borrowed capital multiplier |
+| **OHLCV** | Open, High, Low, Close, Volume - candle data |
+| **Pivot Points** | Support/resistance levels calculated from prior period |
+| **Profit Factor** | Gross profit / Gross loss |
+| **Sharpe Ratio** | Risk-adjusted return metric |
+| **Slippage** | Difference between expected and actual fill price |
+| **SMMA** | Smoothed Moving Average |
+| **SSOT** | Single Source of Truth |
+| **Stop Loss** | Order to limit losses |
+| **Take Profit** | Order to secure profits |
+| **Timeframe** | Candle period (1m, 5m, 1h, 4h, 1d) |
+
+---
+
+## Appendix A: Strategy Schema Full Example
+
+```yaml
+# See separate artifact for complete schema example
+```
+
+## Appendix B: API Error Codes
+
+| Code | HTTP Status | Description |
+|------|-------------|-------------|
+| AUTH_INVALID_TOKEN | 401 | Invalid or expired JWT |
+| AUTH_FORBIDDEN | 403 | Insufficient permissions |
+| VALIDATION_ERROR | 400 | Request validation failed |
+| STRATEGY_NOT_FOUND | 404 | Strategy does not exist |
+| STRATEGY_INVALID | 400 | Invalid strategy schema |
+| BACKTEST_FAILED | 500 | Backtest execution error |
+| EXCHANGE_ERROR | 502 | Exchange API error |
+| RATE_LIMIT | 429 | Too many requests |
+
+---
+
+**Document History**
+
+| Version | Date | Author | Changes |
+|---------|------|--------|---------|
+| 1.0 | 2025-01-13 | Marcin | Initial draft |
