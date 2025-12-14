@@ -580,7 +580,7 @@ export class DataDownloadComponent {
       this.eventSource.close();
     }
 
-    const url = `http://localhost:3000/api/market-data/download-candles?symbol=${this.symbol}&startDate=${this.startDate}&endDate=${this.endDate}`;
+    const url = `/api/market-data/download-candles?symbol=${this.symbol}&startDate=${this.startDate}&endDate=${this.endDate}`;
     
     this.eventSource = new EventSource(url);
 

@@ -7,7 +7,7 @@ import { firstValueFrom } from 'rxjs';
 })
 export class ApiService {
   private http = inject(HttpClient);
-  private baseUrl = 'http://localhost:3000/api';
+  private baseUrl = '/api';
 
   // Strategies
   async getStrategies(): Promise<any[]> {
