@@ -10,7 +10,7 @@
 
 import { BybitClient } from '../exchange/bybit-client';
 import { CandleCache, getCandleCache, isCacheAvailable } from './candle-cache';
-import { OHLCV, Timeframe } from '../types/ohlcv';
+import { OHLCV, Timeframe, timeframeToMs } from '../types/ohlcv';
 
 /**
  * Callback do raportowania postępu
@@ -23,6 +23,8 @@ export type DataProgressCallback = (message: string, loaded?: number, total?: nu
 export interface CachedDataProviderOptions {
   /** Wymuś pobieranie z API (ignoruj cache) */
   forceRefresh?: boolean;
+  /** Tylko cache - NIE pobieraj z Bybit jeśli brak danych */
+  cacheOnly?: boolean;
   /** Użyj testnet Bybit */
   testnet?: boolean;
   /** Custom MongoDB URI */
@@ -58,11 +60,15 @@ export async function fetchCachedCandles(
     totalTime: 0,
   };
 
+  // Oblicz stałą wartość estimatedTotal na początku - używaj WSZĘDZIE
+  const intervalMs = timeframeToMs(timeframe);
+  const estimatedTotal = Math.ceil((endDate.getTime() - startDate.getTime()) / intervalMs);
+
   // Sprawdź czy cache jest dostępny
   const cacheAvailable = !options.forceRefresh && (await isCacheAvailable());
 
   if (cacheAvailable) {
-    onProgress?.('📦 Cache MongoDB dostępny, sprawdzam dane...');
+    onProgress?.('📦 Cache MongoDB dostępny, sprawdzam dane...', 0, estimatedTotal);
 
     const cache = getCandleCache(
       options.mongoUri ? { mongoUri: options.mongoUri } : undefined
@@ -74,7 +80,7 @@ export async function fetchCachedCandles(
     stats.fromCache = cachedCandles.length;
 
     if (cachedCandles.length > 0) {
-      onProgress?.(`📦 Znaleziono ${cachedCandles.length} świec w cache`);
+      onProgress?.(`📦 Znaleziono ${cachedCandles.length} świec w cache`, cachedCandles.length, estimatedTotal);
     }
 
     // Znajdź brakujące zakresy
@@ -87,14 +93,27 @@ export async function fetchCachedCandles(
 
     if (missingRanges.length === 0) {
       // Wszystkie dane w cache!
-      onProgress?.(`✅ Wszystkie dane z cache (${cachedCandles.length} świec)`);
+      onProgress?.(`✅ Wszystkie dane z cache (${cachedCandles.length} świec)`, cachedCandles.length, estimatedTotal);
+      stats.totalTime = Date.now() - startTime;
+      return { candles: cachedCandles, stats };
+    }
+
+    // Tryb cacheOnly - NIE pobieraj z Bybit
+    if (options.cacheOnly) {
+      onProgress?.(
+        `⚠️ Brakuje danych (${missingRanges.length} zakresów). Tryb cacheOnly - nie pobieram z Bybit.`,
+        stats.fromCache,
+        estimatedTotal
+      );
       stats.totalTime = Date.now() - startTime;
       return { candles: cachedCandles, stats };
     }
 
     // Pobierz brakujące dane z API
     onProgress?.(
-      `🔄 Brakuje ${missingRanges.length} zakresów, pobieram z Bybit...`
+      `🔄 Brakuje ${missingRanges.length} zakresów, pobieram z Bybit...`,
+      stats.fromCache,
+      estimatedTotal
     );
 
     const client = new BybitClient({ testnet: options.testnet || false });
@@ -109,7 +128,8 @@ export async function fetchCachedCandles(
       if (pendingCandles.length > 0) {
         const saved = await cache.saveCandles(symbol, timeframe, pendingCandles, () => {});
         stats.savedToCache += saved;
-        onProgress?.(`💾 Zapisano ${saved} świec do cache (łącznie: ${stats.savedToCache})`);
+        const currentLoaded = stats.fromCache + stats.fromApi;
+        onProgress?.(`💾 Zapisano ${saved} świec do cache`, currentLoaded, estimatedTotal);
         pendingCandles = [];  // Zwolnij pamięć
       }
     };
@@ -117,7 +137,9 @@ export async function fetchCachedCandles(
     for (let i = 0; i < missingRanges.length; i++) {
       const range = missingRanges[i];
       onProgress?.(
-        `🔄 Pobieram zakres ${i + 1}/${missingRanges.length}: ${range.start.toISOString().slice(0, 10)} - ${range.end.toISOString().slice(0, 10)}`
+        `🔄 Pobieram zakres ${i + 1}/${missingRanges.length}: ${range.start.toISOString().slice(0, 10)} - ${range.end.toISOString().slice(0, 10)}`,
+        stats.fromCache + stats.fromApi,
+        estimatedTotal
       );
 
       await client.fetchHistoricalOHLCV(
@@ -125,14 +147,17 @@ export async function fetchCachedCandles(
         timeframe,
         range.start,
         range.end,
-        // onProgress - raportuj postęp
-        (loaded, total) => {
-          onProgress?.(`   Pobrano ${loaded}/${total} świec`, loaded, total);
-        },
-        // onBatch - NATYCHMIASTOWY zapis do cache po każdym batchu z API!
+        // onProgress - NIE używamy 'loaded' z BybitClient, tylko nasze stats
+        // (bo onBatch aktualizuje stats.fromApi i byłoby podwójne liczenie)
+        undefined,
+        // onBatch - NATYCHMIASTOWY zapis do cache + raportowanie postępu
         async (batchCandles) => {
           pendingCandles.push(...batchCandles);
           stats.fromApi += batchCandles.length;
+
+          // Raportuj postęp po każdym batchu
+          const currentLoaded = stats.fromCache + stats.fromApi;
+          onProgress?.(`   Pobrano ${currentLoaded}/${estimatedTotal} świec`, currentLoaded, estimatedTotal);
 
           // Zapisz gdy bufor >= SAVE_BATCH_SIZE
           if (pendingCandles.length >= SAVE_BATCH_SIZE) {

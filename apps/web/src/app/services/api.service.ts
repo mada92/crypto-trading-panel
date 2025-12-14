@@ -104,4 +104,25 @@ export class ApiService {
       this.http.get<string[]>(`${this.baseUrl}/market-data/timeframes`)
     );
   }
+
+  /**
+   * Pobierz status aktywnego pobierania danych dla symbolu
+   */
+  async getDownloadStatus(symbol: string): Promise<{
+    id?: string;
+    symbol: string;
+    status: 'running' | 'completed' | 'failed' | 'none';
+    progress: number;
+    loaded: number;
+    total: number;
+    message: string;
+  } | null> {
+    try {
+      return await firstValueFrom(
+        this.http.get<any>(`${this.baseUrl}/market-data/download-status?symbol=${symbol}`)
+      );
+    } catch {
+      return null;
+    }
+  }
 }

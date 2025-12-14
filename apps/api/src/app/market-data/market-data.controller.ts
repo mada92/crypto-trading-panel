@@ -52,7 +52,7 @@ export class MarketDataController {
             percent,
             cached,
             downloaded,
-            message: `Pobrano 123 ${loaded.toLocaleString()} / ${total.toLocaleString()} świec`,
+            message: `Pobrano ${loaded.toLocaleString()} / ${total.toLocaleString()} świec`,
           });
         }
       );
@@ -85,6 +85,23 @@ export class MarketDataController {
       throw new BadRequestException('Symbol is required');
     }
     return this.marketDataService.getCacheInfo(symbol);
+  }
+
+  /**
+   * Pobierz status aktywnego pobierania dla symbolu
+   * Pozwala wznowić progressbar po odświeżeniu strony
+   */
+  @Get('download-status')
+  getDownloadStatus(@Query('symbol') symbol: string) {
+    if (!symbol) {
+      // Zwróć wszystkie aktywne pobierania
+      return this.marketDataService.getAllDownloadStatuses();
+    }
+    const status = this.marketDataService.getDownloadStatus(symbol);
+    if (!status) {
+      return { status: 'none', symbol };
+    }
+    return status;
   }
 
   @Get('klines')

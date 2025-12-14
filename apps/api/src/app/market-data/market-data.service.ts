@@ -13,12 +13,32 @@ import {
   aggregateOHLCV,
 } from '@trading-system/core';
 
+/**
+ * Stan aktywnego pobierania
+ */
+export interface DownloadStatus {
+  id: string;
+  symbol: string;
+  startDate: Date;
+  endDate: Date;
+  status: 'running' | 'completed' | 'failed';
+  progress: number;
+  loaded: number;
+  total: number;
+  message: string;
+  startedAt: Date;
+  completedAt?: Date;
+}
+
 @Injectable()
 export class MarketDataService {
   private readonly logger = new Logger(MarketDataService.name);
   private bybitClient: BybitClient | null = null;
   private useRealData = false;
   private mongoUri: string = 'mongodb://localhost:27017';
+  
+  // Mapa aktywnych i ostatnich pobierań (klucz = symbol)
+  private activeDownloads: Map<string, DownloadStatus> = new Map();
 
   constructor(private readonly configService: ConfigService) {
     this.mongoUri = this.configService.get<string>('MONGODB_URI') || 'mongodb://localhost:27017';
@@ -54,8 +74,14 @@ export class MarketDataService {
   }
 
   /**
-   * Pobierz dane historyczne - używa cache MongoDB, pobiera brakujące z Bybit
-   * Jeśli w cache są świece 1m, agreguje je do żądanego timeframe
+   * Pobierz dane historyczne - ZAWSZE używa danych 1m z cache
+   * 
+   * Logika:
+   * 1. Pobierz świece 1m z cache (NIE pobiera z Bybit!)
+   * 2. Jeśli żądany TF != 1m → zagreguj do wyższego TF
+   * 3. Jeśli brak 1m → fallback do syntetycznych danych
+   * 
+   * UWAGA: Dane 1m muszą być wcześniej pobrane przez stronę "Pobieranie danych"
    */
   async getHistoricalData(
     symbol: string,
@@ -65,12 +91,12 @@ export class MarketDataService {
     limit?: number
   ): Promise<OHLCV[]> {
     try {
-      // Najpierw spróbuj pobrać dane z żądanego timeframe
-      this.logger.debug(`Fetching data for ${symbol} ${timeframe} (using cache)`);
-      
-      const result = await fetchCachedCandles(
+      this.logger.debug(`Fetching ${symbol} ${timeframe} from 1m cache...`);
+
+      // ZAWSZE używaj tylko 1m - jeśli brak w cache, pobierz z Bybit
+      const result1m = await fetchCachedCandles(
         symbol,
-        timeframe,
+        '1m',  // ZAWSZE 1m - nigdy inne TF!
         startDate,
         endDate,
         { mongoUri: this.mongoUri },
@@ -79,75 +105,41 @@ export class MarketDataService {
         }
       );
 
-      if (result.candles.length > 0) {
-        this.logger.log(
-          `Loaded ${result.candles.length} ${timeframe} candles: ${result.stats.fromCache} from cache, ${result.stats.fromApi} from API`
-        );
+      if (result1m.candles.length > 0) {
+        let data: OHLCV[];
 
-        let data = result.candles;
+        if (timeframe === '1m') {
+          // Żądany timeframe to 1m - zwróć bez agregacji
+          data = result1m.candles;
+          this.logger.log(`✅ Loaded ${data.length} 1m candles from cache`);
+        } else {
+          // Agreguj 1m do żądanego timeframe
+          this.logger.log(`Aggregating ${result1m.candles.length} 1m candles to ${timeframe}...`);
+          data = aggregateOHLCV(result1m.candles, '1m', timeframe);
+          this.logger.log(`✅ Created ${data.length} ${timeframe} candles from 1m data`);
+        }
+
         if (limit && data.length > limit) {
           data = data.slice(-limit);
         }
         return data;
       }
 
-      // Jeśli nie ma danych z żądanego timeframe, spróbuj zagregować z 1m
-      if (timeframe !== '1m') {
-        this.logger.debug(`No ${timeframe} data, trying to aggregate from 1m...`);
-        
-        const result1m = await fetchCachedCandles(
-          symbol,
-          '1m',
-          startDate,
-          endDate,
-          { mongoUri: this.mongoUri },
-          (message) => {
-            this.logger.debug(message);
-          }
-        );
-
-        if (result1m.candles.length > 0) {
-          this.logger.log(`Aggregating ${result1m.candles.length} 1m candles to ${timeframe}...`);
-          const aggregated = aggregateOHLCV(result1m.candles, '1m', timeframe);
-          
-          this.logger.log(`Created ${aggregated.length} ${timeframe} candles from 1m data`);
-          
-          let data = aggregated;
-          if (limit && data.length > limit) {
-            data = data.slice(-limit);
-          }
-          return data;
-        }
-      }
-
-      // Jeśli nadal brak danych, pobierz bezpośrednio z Bybit
-      this.logger.debug(`No cached data, fetching ${timeframe} from Bybit...`);
-      const directResult = await fetchCachedCandles(
-        symbol,
-        timeframe,
-        startDate,
-        endDate,
-        { mongoUri: this.mongoUri, forceRefresh: true },
-        (message) => {
-          this.logger.debug(message);
-        }
+      // Brak danych 1m w cache
+      this.logger.warn(
+        `⚠️ No 1m data in cache for ${symbol}. Use "Pobieranie danych" page to download candles first.`
       );
-
-      let data = directResult.candles;
-      if (limit && data.length > limit) {
-        data = data.slice(-limit);
-      }
-      return data;
+      
     } catch (error) {
       this.logger.warn(
-        `Failed to fetch from cache/Bybit: ${(error as Error).message}. Falling back to synthetic data.`
+        `Failed to fetch 1m data: ${(error as Error).message}. Falling back to synthetic data.`
       );
     }
 
-    // Fallback do syntetycznych danych - Single Source of Truth z core
-    this.logger.debug(`Using synthetic data for ${symbol}`);
+    // Fallback do syntetycznych danych
+    this.logger.debug(`Using synthetic data for ${symbol} ${timeframe}`);
     const data = generateSyntheticData(symbol, timeframe, startDate, endDate, {
-      seed: 42, // Stały seed dla powtarzalności
+      seed: 42,
     });
 
     if (limit && data.length > limit) {
@@ -162,6 +154,20 @@ export class MarketDataService {
 
   getAvailableTimeframes(): Timeframe[] {
     return ['1m', '5m', '15m', '30m', '1h', '4h', '1d', '1w'];
+  }
+
+  /**
+   * Pobierz status pobierania dla symbolu
+   */
+  getDownloadStatus(symbol: string): DownloadStatus | null {
+    return this.activeDownloads.get(symbol) || null;
+  }
+
+  /**
+   * Pobierz wszystkie aktywne pobierania
+   */
+  getAllDownloadStatuses(): DownloadStatus[] {
+    return Array.from(this.activeDownloads.values());
   }
 
   /**
@@ -180,29 +186,74 @@ export class MarketDataService {
     const estimatedTotal = Math.floor((endDate.getTime() - startDate.getTime()) / 60000);
     let lastLoaded = 0;
 
-    const result = await fetchCachedCandles(
+    // Utwórz status pobierania
+    const downloadId = `${symbol}-${Date.now()}`;
+    const status: DownloadStatus = {
+      id: downloadId,
       symbol,
-      timeframe,
       startDate,
       endDate,
-      { mongoUri: this.mongoUri },
-      (message, loaded, total) => {
-        this.logger.debug(message);
-        if (loaded !== undefined && total !== undefined) {
-          lastLoaded = loaded;
-          onProgress(loaded, total, 0, loaded);
-        } else {
-          // Aktualizuj z szacowaną wartością
-          onProgress(lastLoaded, estimatedTotal, 0, 0);
-        }
-      }
-    );
-
-    return {
-      candlesCount: result.candles.length,
-      cached: result.stats.fromCache,
-      downloaded: result.stats.fromApi,
+      status: 'running',
+      progress: 0,
+      loaded: 0,
+      total: estimatedTotal,
+      message: 'Rozpoczynam pobieranie...',
+      startedAt: new Date(),
     };
+    this.activeDownloads.set(symbol, status);
+
+    try {
+      const result = await fetchCachedCandles(
+        symbol,
+        timeframe,
+        startDate,
+        endDate,
+        { mongoUri: this.mongoUri },
+        (message, loaded, total) => {
+          this.logger.debug(message);
+          // Używaj wartości z cached-data-provider (są już spójne)
+          const currentLoaded = loaded ?? lastLoaded;
+          const currentTotal = total ?? estimatedTotal;
+          lastLoaded = currentLoaded;
+          
+          // Aktualizuj status
+          const currentStatus = this.activeDownloads.get(symbol);
+          if (currentStatus) {
+            currentStatus.loaded = currentLoaded;
+            currentStatus.total = currentTotal;
+            currentStatus.progress = currentTotal > 0 ? Math.round((currentLoaded / currentTotal) * 100) : 0;
+            currentStatus.message = message;
+          }
+          
+          onProgress(currentLoaded, currentTotal, 0, currentLoaded);
+        }
+      );
+
+      // Zakończ pobieranie
+      const finalStatus = this.activeDownloads.get(symbol);
+      if (finalStatus) {
+        finalStatus.status = 'completed';
+        finalStatus.progress = 100;
+        finalStatus.loaded = result.candles.length;
+        finalStatus.message = `Zakończono! Pobrano ${result.candles.length} świec`;
+        finalStatus.completedAt = new Date();
+      }
+
+      return {
+        candlesCount: result.candles.length,
+        cached: result.stats.fromCache,
+        downloaded: result.stats.fromApi,
+      };
+    } catch (error) {
+      // Błąd pobierania
+      const errorStatus = this.activeDownloads.get(symbol);
+      if (errorStatus) {
+        errorStatus.status = 'failed';
+        errorStatus.message = `Błąd: ${(error as Error).message}`;
+        errorStatus.completedAt = new Date();
+      }
+      throw error;
+    }
   }
 
   /**

@@ -493,6 +493,80 @@ export class DataDownloadComponent {
     } catch (e) {
       console.error('Failed to load symbols', e);
     }
+
+    // Sprawdź czy jest aktywne pobieranie dla tego symbolu
+    await this.checkActiveDownload();
+  }
+
+  /**
+   * Sprawdź czy jest aktywne pobieranie i wznów progressbar
+   */
+  private async checkActiveDownload() {
+    try {
+      const status = await this.api.getDownloadStatus(this.symbol);
+      
+      if (status && status.status === 'running') {
+        // Jest aktywne pobieranie - wznów wyświetlanie progressu
+        this.isDownloading.set(true);
+        this.lastProgress.set({
+          type: 'progress',
+          loaded: status.loaded,
+          total: status.total,
+          percent: status.progress,
+          message: status.message,
+        });
+
+        // Polling co 500ms żeby aktualizować progress
+        this.startPolling();
+      }
+    } catch (e) {
+      console.error('Failed to check download status', e);
+    }
+  }
+
+  private pollingInterval: ReturnType<typeof setInterval> | null = null;
+
+  private startPolling() {
+    // Zatrzymaj poprzedni polling
+    if (this.pollingInterval) {
+      clearInterval(this.pollingInterval);
+    }
+
+    this.pollingInterval = setInterval(async () => {
+      try {
+        const status = await this.api.getDownloadStatus(this.symbol);
+        
+        if (!status || status.status === 'none') {
+          this.stopPolling();
+          return;
+        }
+
+        this.lastProgress.set({
+          type: status.status === 'completed' ? 'complete' : 
+                status.status === 'failed' ? 'error' : 'progress',
+          loaded: status.loaded,
+          total: status.total,
+          percent: status.progress,
+          message: status.message,
+          candlesCount: status.loaded,
+        });
+
+        if (status.status === 'completed' || status.status === 'failed') {
+          this.isDownloading.set(false);
+          this.stopPolling();
+        }
+      } catch (e) {
+        console.error('Polling error', e);
+        this.stopPolling();
+      }
+    }, 500);
+  }
+
+  private stopPolling() {
+    if (this.pollingInterval) {
+      clearInterval(this.pollingInterval);
+      this.pollingInterval = null;
+    }
   }
 
   startDownload() {
@@ -540,6 +614,7 @@ export class DataDownloadComponent {
     if (this.eventSource) {
       this.eventSource.close();
     }
+    this.stopPolling();
   }
 }
 
