@@ -41,4 +41,11 @@ export const appRoutes: Routes = [
         (m) => m.BacktestResultComponent
       ),
   },
+  {
+    path: 'data-download',
+    loadComponent: () =>
+      import('./pages/data-download/data-download.component').then(
+        (m) => m.DataDownloadComponent
+      ),
+  },
 ];

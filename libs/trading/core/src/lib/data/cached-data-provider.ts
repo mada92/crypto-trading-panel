@@ -100,7 +100,19 @@ export async function fetchCachedCandles(
     const client = new BybitClient({ testnet: options.testnet || false });
     await client.connect();
 
-    const allNewCandles: OHLCV[] = [];
+    // Bufor do grupowania zapisów (zapisujemy co ~1000 świec dla wydajności)
+    let pendingCandles: OHLCV[] = [];
+    const SAVE_BATCH_SIZE = 1000;
+
+    // Funkcja do zapisu bufora
+    const flushPendingCandles = async () => {
+      if (pendingCandles.length > 0) {
+        const saved = await cache.saveCandles(symbol, timeframe, pendingCandles, () => {});
+        stats.savedToCache += saved;
+        onProgress?.(`💾 Zapisano ${saved} świec do cache (łącznie: ${stats.savedToCache})`);
+        pendingCandles = [];  // Zwolnij pamięć
+      }
+    };
 
     for (let i = 0; i < missingRanges.length; i++) {
       const range = missingRanges[i];
@@ -108,45 +120,42 @@ export async function fetchCachedCandles(
         `🔄 Pobieram zakres ${i + 1}/${missingRanges.length}: ${range.start.toISOString().slice(0, 10)} - ${range.end.toISOString().slice(0, 10)}`
       );
 
-      const newCandles = await client.fetchHistoricalOHLCV(
+      await client.fetchHistoricalOHLCV(
         symbol,
         timeframe,
         range.start,
         range.end,
+        // onProgress - raportuj postęp
         (loaded, total) => {
           onProgress?.(`   Pobrano ${loaded}/${total} świec`, loaded, total);
+        },
+        // onBatch - NATYCHMIASTOWY zapis do cache po każdym batchu z API!
+        async (batchCandles) => {
+          pendingCandles.push(...batchCandles);
+          stats.fromApi += batchCandles.length;
+
+          // Zapisz gdy bufor >= SAVE_BATCH_SIZE
+          if (pendingCandles.length >= SAVE_BATCH_SIZE) {
+            await flushPendingCandles();
+          }
         }
       );
-
-      allNewCandles.push(...newCandles);
-      stats.fromApi += newCandles.length;
     }
 
-    // Zapisz nowe świece do cache
-    if (allNewCandles.length > 0) {
-      const saved = await cache.saveCandles(symbol, timeframe, allNewCandles, (msg) =>
-        onProgress?.(msg)
-      );
-      stats.savedToCache = saved;
-    }
+    // Zapisz pozostałe świece z bufora
+    await flushPendingCandles();
 
-    // Połącz dane z cache i API
-    const allCandles = [...cachedCandles, ...allNewCandles].sort(
-      (a, b) => a.timestamp - b.timestamp
-    );
-
-    // Usuń duplikaty
-    const uniqueCandles = allCandles.filter(
-      (candle, index, self) =>
-        index === self.findIndex((c) => c.timestamp === candle.timestamp)
-    );
+    // Pobierz WSZYSTKIE dane z cache (już zapisane inkrementalnie)
+    // Nie trzymamy nic w RAM - pobieramy gotowe z MongoDB
+    // Cache.getCandles zwraca posortowane i bez duplikatów (upsert w saveCandles)
+    const allCandles = await cache.getCandles(symbol, timeframe, startDate, endDate);
 
     stats.totalTime = Date.now() - startTime;
     onProgress?.(
-      `✅ Gotowe: ${stats.fromCache} z cache + ${stats.fromApi} z API (${(stats.totalTime / 1000).toFixed(1)}s)`
+      `✅ Gotowe: ${allCandles.length} świec (${stats.fromCache} było w cache + ${stats.fromApi} pobrano) [${(stats.totalTime / 1000).toFixed(1)}s]`
     );
 
-    return { candles: uniqueCandles, stats };
+    return { candles: allCandles, stats };
   } else {
     // Cache niedostępny - pobierz bezpośrednio z API
     onProgress?.('⚠️ Cache niedostępny, pobieram bezpośrednio z Bybit...');

@@ -65,13 +65,14 @@ System do backtestingu i automatycznego tradingu kryptowalut zbudowany w archite
 
 - **Node.js** >= 20.19.0 (zalecane 22.x)
 - **npm** >= 8.0.0
+- **Docker** & **Docker Compose** (opcjonalnie, zalecane)
 - **Git**
 
 ## 🔧 Instalacja
 
 ```bash
 # Klonowanie repozytorium
-git clone <repo-url>
+git clone https://github.com/mada92/crypto-trading-panel.git
 cd crypto-trading-panel
 
 # Instalacja zależności
@@ -80,62 +81,82 @@ npm install
 
 ## 🚀 Uruchomienie
 
-### Wszystkie aplikacje (zalecane)
+### 🐳 Docker - Development (zalecane)
+
+Tryb deweloperski z hot reload - bazy danych w kontenerach, aplikacje lokalnie:
+
+```bash
+# 1. Uruchom infrastrukturę (MongoDB, Redis, Mongo Express)
+npm run dev:infra
+
+# 2. W osobnym terminalu - Backend API (z hot reload)
+npm run dev:api
+
+# 3. W osobnym terminalu - Frontend Web (z hot reload)
+npm run dev:web
+```
+
+| Usługa | URL | Opis |
+|--------|-----|------|
+| API | http://localhost:3000/api | Backend NestJS |
+| Web | http://localhost:4200 | Frontend Angular |
+| Mongo Express | http://localhost:8081 | Przeglądarka MongoDB |
+| MongoDB | localhost:27017 | Baza danych |
+| Redis | localhost:6379 | Cache |
+
+**Mongo Express login:** `admin` / `admin123`
+
+### 🐳 Docker - Production
+
+Wszystko w kontenerach - do wdrożenia produkcyjnego:
+
+```bash
+# Zbuduj i uruchom wszystkie kontenery
+npm run docker:build
+npm run docker:up
+
+# Lub jedną komendą
+docker-compose up -d --build
+```
+
+### 💻 Bez Dockera (tylko Node.js)
 
 ```bash
 # Terminal 1 - Backend API
-npx nx run api:serve
+npm run dev:api
 
 # Terminal 2 - Frontend Web
-npx nx run web:serve
+npm run dev:web
 ```
 
-### Backend API
-
-```bash
-# Budowanie
-npx nx run api:build
-
-# Uruchomienie (development)
-npx nx run api:serve
-
-# Lub bezpośrednio
-node dist/apps/api/main.js
-```
-
-API dostępne pod: **http://localhost:3000/api**
-
-### Frontend Web
-
-```bash
-# Development server
-npx nx run web:serve
-```
-
-Frontend dostępny pod: **http://localhost:4200**
+> ⚠️ Wymaga ręcznej instalacji MongoDB i Redis lokalnie.
 
 ### CLI do backtestingu
 
 ```bash
-# Budowanie
-npx nx run backtest-cli:build
-
 # Uruchomienie
-node dist/apps/backtest-cli/main.js
+npm run backtest
 
-# Z parametrami
-node dist/apps/backtest-cli/main.js --symbol BTCUSDT --timeframe 4h --start 2024-01-01 --end 2024-12-01
+# Lub z parametrami
+npx nx serve backtest-cli -- --symbol BTCUSDT --timeframe 4h --start 2024-01-01 --end 2024-12-01
 ```
 
-### Budowanie wszystkich projektów
+## 📜 Dostępne skrypty npm
 
-```bash
-# Buduj wszystko
-npx nx run-many -t build
-
-# Buduj tylko core library
-npx nx run core:build
-```
+| Skrypt | Opis |
+|--------|------|
+| `npm run dev:infra` | Uruchom MongoDB, Redis, Mongo Express (Docker) |
+| `npm run dev:infra:down` | Zatrzymaj infrastrukturę |
+| `npm run dev:api` | Uruchom API z hot reload |
+| `npm run dev:web` | Uruchom Web z hot reload |
+| `npm run docker:up` | Uruchom pełny stack produkcyjny |
+| `npm run docker:down` | Zatrzymaj kontenery |
+| `npm run docker:build` | Zbuduj obrazy Docker |
+| `npm run docker:logs` | Pokaż logi kontenerów |
+| `npm run backtest` | Uruchom CLI backtestów |
+| `npm run build` | Zbuduj wszystkie projekty |
+| `npm run lint` | Sprawdź kod |
+| `npm run test` | Uruchom testy |
 
 ## 📁 Struktura projektu
 
@@ -293,25 +314,67 @@ const myStrategy: StrategySchema = {
 | OBV | Volume | signalPeriod |
 | Volume SMA | Volume | period |
 
+## 🐳 Struktura Docker
+
+```
+docker-compose.yml       # Produkcja - wszystko w kontenerach
+docker-compose.dev.yml   # Development - tylko bazy danych
+├── Dockerfile.api       # Multi-stage build dla NestJS
+├── Dockerfile.web       # Multi-stage build dla Angular + nginx
+├── Dockerfile.cli       # Build dla CLI backtestów
+└── docker/
+    ├── nginx.conf       # Konfiguracja nginx z proxy do API
+    └── mongo-init.js    # Inicjalizacja MongoDB
+```
+
+### Kontenery produkcyjne
+
+| Kontener | Obraz | Port | Opis |
+|----------|-------|------|------|
+| `trading-web` | Angular + nginx | 4200 | Frontend z proxy do API |
+| `trading-api` | Node.js | 3000 | Backend NestJS |
+| `trading-mongodb` | mongo:7.0 | 27017 | Baza danych |
+| `trading-redis` | redis:7-alpine | 6379 | Cache |
+| `trading-mongo-express` | mongo-express:1.0 | 8081 | GUI dla MongoDB |
+
 ## ⚙️ Konfiguracja
 
 ### Zmienne środowiskowe
 
-Utwórz plik `.env.local` w głównym katalogu:
+Utwórz plik `.env` w głównym katalogu (lub użyj wartości domyślnych):
 
 ```env
-# Bybit API (opcjonalne - dla prawdziwych danych)
+# MongoDB
+MONGO_PORT=27017
+MONGO_USER=trading
+MONGO_PASSWORD=trading123
+MONGO_DB=trading
+
+# Redis
+REDIS_PORT=6379
+
+# API
+API_PORT=3000
+
+# Web
+WEB_PORT=4200
+
+# Mongo Express
+MONGO_EXPRESS_PORT=8081
+MONGO_EXPRESS_USER=admin
+MONGO_EXPRESS_PASSWORD=admin123
+
+# Bybit API (opcjonalne - dla prawdziwych danych rynkowych)
 BYBIT_API_KEY=your_api_key
 BYBIT_API_SECRET=your_api_secret
 BYBIT_TESTNET=true
-
-# Serwer
-PORT=3000
 ```
 
 ### Konfiguracja Bybit
 
 Bez kluczy API system automatycznie używa danych syntetycznych do backtestingu. Dane syntetyczne są generowane z realistyczną zmiennością dla każdego symbolu.
+
+Z kluczami API system pobiera prawdziwe dane historyczne z Bybit i cachuje je w MongoDB.
 
 ## 🧪 Testy
 
@@ -373,6 +436,46 @@ npx nx format:write
 npx nx migrate latest
 ```
 
+## 🔥 Zaawansowane funkcje
+
+### Multi-Timeframe Analysis (MTF)
+
+Strategie mogą używać danych z wielu timeframe'ów jednocześnie:
+
+```typescript
+dataRequirements: {
+  primaryTimeframe: '4h',
+  additionalTimeframes: ['1d'],  // Dzienny trend
+  lookbackPeriods: 200,
+}
+```
+
+### Agregacja świec 1m → dowolny timeframe
+
+CLI może pobierać dane 1-minutowe i agregować je do wyższych timeframe'ów z dodatkowymi metrykami dynamiki rynku:
+
+```bash
+node dist/apps/backtest-cli/main.js --use-1m-data
+```
+
+Metryki dynamiki:
+- **Price Velocity** - prędkość zmiany ceny
+- **Volume Spikes** - nagłe wzrosty wolumenu  
+- **Body-to-Wick Ratio** - stosunek korpusu do cienia
+- **Intrabar Volatility** - zmienność wewnątrz świecy
+
+### MongoDB Cache
+
+Dane historyczne są automatycznie cachowane w MongoDB, co przyspiesza kolejne backtesty:
+
+```bash
+# Pierwsze uruchomienie - pobiera z Bybit (~5 min dla 1m data)
+npm run backtest
+
+# Kolejne uruchomienia - używa cache (<1 sek)
+npm run backtest
+```
+
 ## 📝 Licencja
 
 MIT
@@ -380,3 +483,7 @@ MIT
 ## 🤝 Kontakt
 
 Projekt rozwijany jako narzędzie do backtestingu strategii tradingowych.
+
+---
+
+**Made with ❤️ using Nx, NestJS, Angular & TypeScript**

@@ -112,13 +112,16 @@ export class BybitClient implements IExchangeClient {
 
   /**
    * Pobierz historyczne dane OHLCV (z paginacją)
+   * @param onProgress - callback z postępem (loaded, total)
+   * @param onBatch - callback z nowymi świecami do inkrementalnego zapisu
    */
   async fetchHistoricalOHLCV(
     symbol: string,
     timeframe: Timeframe,
     startDate: Date,
     endDate: Date,
-    onProgress?: (loaded: number, total: number) => void
+    onProgress?: (loaded: number, total: number) => void,
+    onBatch?: (candles: OHLCV[]) => Promise<void>
   ): Promise<OHLCV[]> {
     const allData: OHLCV[] = [];
     const intervalMs = timeframeToMs(timeframe);
@@ -148,6 +151,11 @@ export class BybitClient implements IExchangeClient {
       // Raportuj postęp
       if (onProgress) {
         onProgress(allData.length, estimatedTotal);
+      }
+
+      // Callback z nowymi świecami do inkrementalnego zapisu
+      if (onBatch && filtered.length > 0) {
+        await onBatch(filtered);
       }
 
       // Krótka pauza aby nie przekroczyć rate limit

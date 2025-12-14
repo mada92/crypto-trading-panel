@@ -1,59 +1,153 @@
 version: '3.8'
 
 services:
+  # ============================================
   # MongoDB - cache świec i dane historyczne
+  # ============================================
   mongodb:
     image: mongo:7.0
     container_name: trading-mongodb
     restart: unless-stopped
     ports:
-      - "27017:27017"
+      - "${MONGO_PORT:-27017}:27017"
     environment:
-      MONGO_INITDB_ROOT_USERNAME: trading
-      MONGO_INITDB_ROOT_PASSWORD: trading123
-      MONGO_INITDB_DATABASE: trading
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_USER:-trading}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_PASSWORD:-trading123}
+      MONGO_INITDB_DATABASE: ${MONGO_DB:-trading}
     volumes:
       - mongodb_data:/data/db
       - ./docker/mongo-init.js:/docker-entrypoint-initdb.d/init.js:ro
+    networks:
+      - trading-network
     healthcheck:
       test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
       interval: 10s
       timeout: 5s
       retries: 5
 
+  # ============================================
+  # Mongo Express - przeglądarka bazy MongoDB
+  # ============================================
+  mongo-express:
+    image: mongo-express:1.0
+    container_name: trading-mongo-express
+    restart: unless-stopped
+    ports:
+      - "${MONGO_EXPRESS_PORT:-8081}:8081"
+    environment:
+      ME_CONFIG_MONGODB_ADMINUSERNAME: ${MONGO_USER:-trading}
+      ME_CONFIG_MONGODB_ADMINPASSWORD: ${MONGO_PASSWORD:-trading123}
+      ME_CONFIG_MONGODB_URL: mongodb://${MONGO_USER:-trading}:${MONGO_PASSWORD:-trading123}@mongodb:27017/
+      ME_CONFIG_BASICAUTH_USERNAME: ${MONGO_EXPRESS_USER:-admin}
+      ME_CONFIG_BASICAUTH_PASSWORD: ${MONGO_EXPRESS_PASSWORD:-admin123}
+    depends_on:
+      mongodb:
+        condition: service_healthy
+    networks:
+      - trading-network
+
+  # ============================================
   # Redis - cache sesji i szybki lookup
+  # ============================================
   redis:
     image: redis:7-alpine
     container_name: trading-redis
     restart: unless-stopped
     ports:
-      - "6379:6379"
+      - "${REDIS_PORT:-6379}:6379"
     volumes:
       - redis_data:/data
     command: redis-server --appendonly yes
+    networks:
+      - trading-network
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 10s
       timeout: 5s
       retries: 5
 
-  # API Backend (opcjonalnie - do uruchomienia w kontenerze)
-  # api:
-  #   build:
-  #     context: .
-  #     dockerfile: Dockerfile.api
-  #   container_name: trading-api
-  #   restart: unless-stopped
-  #   ports:
-  #     - "3000:3000"
-  #   environment:
-  #     - MONGODB_URI=mongodb://trading:trading123@mongodb:27017/trading?authSource=admin
-  #     - REDIS_URL=redis://redis:6379
-  #   depends_on:
-  #     mongodb:
-  #       condition: service_healthy
-  #     redis:
-  #       condition: service_healthy
+  # ============================================
+  # API Backend (NestJS)
+  # ============================================
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+    container_name: trading-api
+    restart: unless-stopped
+    ports:
+      - "${API_PORT:-3000}:3000"
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      # MongoDB
+      MONGODB_URI: mongodb://${MONGO_USER:-trading}:${MONGO_PASSWORD:-trading123}@mongodb:27017/${MONGO_DB:-trading}?authSource=admin
+      # Redis
+      REDIS_URL: redis://redis:6379
+      # Bybit API (opcjonalne - dla prawdziwych danych)
+      BYBIT_API_KEY: ${BYBIT_API_KEY:-}
+      BYBIT_API_SECRET: ${BYBIT_API_SECRET:-}
+      BYBIT_TESTNET: ${BYBIT_TESTNET:-true}
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - trading-network
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000/api/health"]
+      interval: 30s
+      timeout: 10s
+      start_period: 30s
+      retries: 3
+
+  # ============================================
+  # Web Frontend (Angular + Nginx)
+  # ============================================
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile.web
+    container_name: trading-web
+    restart: unless-stopped
+    ports:
+      - "${WEB_PORT:-4200}:80"
+    depends_on:
+      api:
+        condition: service_healthy
+    networks:
+      - trading-network
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:80/"]
+      interval: 30s
+      timeout: 10s
+      start_period: 10s
+      retries: 3
+
+  # ============================================
+  # Backtest CLI (do uruchamiania manualnego)
+  # ============================================
+  backtest-cli:
+    build:
+      context: .
+      dockerfile: Dockerfile.cli
+    container_name: trading-cli
+    profiles:
+      - cli  # Uruchamiany tylko z --profile cli
+    environment:
+      NODE_ENV: production
+      MONGODB_URI: mongodb://${MONGO_USER:-trading}:${MONGO_PASSWORD:-trading123}@mongodb:27017/${MONGO_DB:-trading}?authSource=admin
+      BYBIT_API_KEY: ${BYBIT_API_KEY:-}
+      BYBIT_API_SECRET: ${BYBIT_API_SECRET:-}
+      BYBIT_TESTNET: ${BYBIT_TESTNET:-true}
+    depends_on:
+      mongodb:
+        condition: service_healthy
+    networks:
+      - trading-network
+    stdin_open: true
+    tty: true
 
 volumes:
   mongodb_data:
@@ -62,6 +156,6 @@ volumes:
     driver: local
 
 networks:
-  default:
+  trading-network:
     name: trading-network
-
+    driver: bridge

@@ -1,0 +1,47 @@
+# ============================================
+# Web Frontend (Angular) - Multi-stage build
+# ============================================
+
+# Stage 1: Build
+FROM node:20-alpine AS builder
+
+WORKDIR /app
+
+# Kopiuj pliki package
+COPY package*.json ./
+
+# Instaluj wszystkie zależności
+RUN npm ci
+
+# Kopiuj cały kod źródłowy
+COPY . .
+
+# Buduj Angular app
+RUN npx nx build web --configuration=production
+
+# Stage 2: Production z nginx
+FROM nginx:alpine AS production
+
+# Usuń domyślną konfigurację nginx
+RUN rm -rf /usr/share/nginx/html/*
+
+# Kopiuj zbudowaną aplikację Angular
+COPY --from=builder /app/dist/apps/web/browser /usr/share/nginx/html
+
+# Kopiuj konfigurację nginx
+COPY docker/nginx.conf /etc/nginx/conf.d/default.conf
+
+# Ustaw uprawnienia
+RUN chown -R nginx:nginx /usr/share/nginx/html && \
+    chmod -R 755 /usr/share/nginx/html
+
+# Expose port
+EXPOSE 80
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+  CMD wget --no-verbose --tries=1 --spider http://localhost:80/ || exit 1
+
+# Start nginx
+CMD ["nginx", "-g", "daemon off;"]
+

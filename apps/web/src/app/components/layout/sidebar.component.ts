@@ -26,6 +26,10 @@ import { CommonModule } from '@angular/common';
           <span class="nav-icon">🔬</span>
           <span>Backtesty</span>
         </a>
+        <a routerLink="/data-download" routerLinkActive="active" class="nav-item">
+          <span class="nav-icon">📥</span>
+          <span>Pobieranie danych</span>
+        </a>
       </nav>
 
       <div class="sidebar-footer">
