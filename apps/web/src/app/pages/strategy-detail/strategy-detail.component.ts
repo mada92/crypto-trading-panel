@@ -1,11 +1,12 @@
 import { Component, OnInit, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
+import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, RouterModule } from '@angular/router';
 import { ApiService } from '../../services/api.service';
 
 @Component({
   standalone: true,
-  imports: [CommonModule, RouterModule],
+  imports: [CommonModule, FormsModule, RouterModule],
   selector: 'app-strategy-detail',
   template: `
     <div class="strategy-detail">
@@ -21,6 +22,20 @@ import { ApiService } from '../../services/api.service';
           <p class="subtitle">{{ strategy.schema.description }}</p>
         </div>
         <div class="header-actions">
+          <div class="timeframe-selector">
+            <label for="timeframe">Timeframe:</label>
+            <select id="timeframe" [(ngModel)]="selectedTimeframe" class="select-input">
+              <option value="">Domyślny ({{strategy.schema.dataRequirements.primaryTimeframe}})</option>
+              <option value="1m">1m</option>
+              <option value="5m">5m</option>
+              <option value="15m">15m</option>
+              <option value="30m">30m</option>
+              <option value="1h">1h</option>
+              <option value="4h">4h</option>
+              <option value="1d">1d</option>
+              <option value="1w">1w</option>
+            </select>
+          </div>
           <button class="btn btn-secondary">✏️ Edytuj</button>
           <button class="btn btn-primary" (click)="runBacktest()">
             🚀 Uruchom backtest
@@ -165,6 +180,39 @@ import { ApiService } from '../../services/api.service';
       .header-actions {
         display: flex;
         gap: 12px;
+        align-items: center;
+      }
+
+      .timeframe-selector {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-right: 12px;
+      }
+
+      .timeframe-selector label {
+        color: #888;
+        font-size: 14px;
+      }
+
+      .select-input {
+        background: #1a1a1a;
+        border: 1px solid #333;
+        border-radius: 6px;
+        color: #fff;
+        padding: 8px 12px;
+        font-size: 14px;
+        cursor: pointer;
+        min-width: 140px;
+      }
+
+      .select-input:hover {
+        border-color: #444;
+      }
+
+      .select-input:focus {
+        outline: none;
+        border-color: #2563eb;
       }
 
       .btn {
@@ -326,6 +374,7 @@ export class StrategyDetailComponent implements OnInit {
 
   strategy: any = null;
   loading = true;
+  selectedTimeframe = '';
 
   ngOnInit() {
     const id = this.route.snapshot.paramMap.get('id');
@@ -354,12 +403,19 @@ export class StrategyDetailComponent implements OnInit {
       const startDate = new Date();
       startDate.setFullYear(startDate.getFullYear() - 1);
 
-      const result = await this.apiService.runBacktest({
+      const backtestParams: any = {
         strategyId: this.strategy.id,
         startDate: startDate.toISOString(),
         endDate: endDate.toISOString(),
         initialCapital: 10000,
-      });
+      };
+
+      // Dodaj timeframe tylko jeśli wybrany
+      if (this.selectedTimeframe) {
+        backtestParams.timeframe = this.selectedTimeframe;
+      }
+
+      const result = await this.apiService.runBacktest(backtestParams);
 
       alert(`Backtest uruchomiony! ID: ${result.backtestId}`);
     } catch (error) {

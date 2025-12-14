@@ -62,3 +62,69 @@ export const TIMEFRAME_TO_MINUTES: Record<Timeframe, number> = {
 export function timeframeToMs(timeframe: Timeframe): number {
   return TIMEFRAME_TO_MINUTES[timeframe] * 60 * 1000;
 }
+
+/**
+ * Dane dla wielu timeframe'ów
+ */
+export type MultiTimeframeData = Map<Timeframe, OHLCV[]>;
+
+/**
+ * Znajdź świecę z wyższego timeframe'u dla danego timestamp'u
+ * Zwraca świecę, która zawiera dany timestamp (lub poprzednią zamkniętą)
+ */
+export function findHigherTfCandle(
+  timestamp: number,
+  higherTfData: OHLCV[],
+  higherTf: Timeframe
+): OHLCV | null {
+  const tfMs = timeframeToMs(higherTf);
+  
+  // Znajdź świecę, która zawiera ten timestamp lub jest tuż przed nim
+  // Używamy ostatniej ZAMKNIĘTEJ świecy (nie bieżącej)
+  const candleStartTime = Math.floor(timestamp / tfMs) * tfMs;
+  const previousCandleStart = candleStartTime - tfMs;
+  
+  // Szukamy świecy z poprzedniego okresu (zamkniętej)
+  for (let i = higherTfData.length - 1; i >= 0; i--) {
+    if (higherTfData[i].timestamp <= previousCandleStart) {
+      return higherTfData[i];
+    }
+  }
+  
+  // Fallback - pierwsza dostępna świeca
+  return higherTfData.length > 0 ? higherTfData[0] : null;
+}
+
+/**
+ * Zbuduj indeks świec wyższego TF dla szybkiego wyszukiwania
+ */
+export function buildHigherTfIndex(
+  primaryData: OHLCV[],
+  higherTfData: OHLCV[],
+  higherTf: Timeframe
+): (OHLCV | null)[] {
+  const tfMs = timeframeToMs(higherTf);
+  const result: (OHLCV | null)[] = [];
+  
+  let htfIndex = 0;
+  
+  for (const candle of primaryData) {
+    const previousCandleStart = Math.floor(candle.timestamp / tfMs) * tfMs - tfMs;
+    
+    // Przesuń indeks do odpowiedniej świecy HTF
+    while (
+      htfIndex < higherTfData.length - 1 &&
+      higherTfData[htfIndex + 1].timestamp <= previousCandleStart
+    ) {
+      htfIndex++;
+    }
+    
+    if (htfIndex < higherTfData.length && higherTfData[htfIndex].timestamp <= previousCandleStart) {
+      result.push(higherTfData[htfIndex]);
+    } else {
+      result.push(null);
+    }
+  }
+  
+  return result;
+}

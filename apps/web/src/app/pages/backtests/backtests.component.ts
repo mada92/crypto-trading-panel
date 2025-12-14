@@ -64,6 +64,24 @@ interface BacktestSummary {
           </div>
 
           <div class="form-group">
+            <label for="timeframe">Timeframe</label>
+            <select
+              id="timeframe"
+              [(ngModel)]="newBacktest.timeframe"
+              class="form-control"
+            >
+              <option value="1m">1m</option>
+              <option value="5m">5m</option>
+              <option value="15m">15m</option>
+              <option value="30m">30m</option>
+              <option value="1h">1h</option>
+              <option value="4h">4h</option>
+              <option value="1d">1d</option>
+              <option value="1w">1w</option>
+            </select>
+          </div>
+
+          <div class="form-group">
             <label for="startDate">Data początkowa</label>
             <input
               type="date"
@@ -429,6 +447,7 @@ export class BacktestsComponent implements OnInit {
   newBacktest = {
     strategyId: '',
     symbol: 'BTCUSDT',
+    timeframe: '4h' as '1m' | '5m' | '15m' | '30m' | '1h' | '4h' | '1d' | '1w',
     startDate: this.getDefaultStartDate(),
     endDate: this.getDefaultEndDate(),
     initialCapital: 10000,
@@ -463,6 +482,7 @@ export class BacktestsComponent implements OnInit {
         startDate: this.newBacktest.startDate,
         endDate: this.newBacktest.endDate,
         symbol: this.newBacktest.symbol,
+        timeframe: this.newBacktest.timeframe,
         initialCapital: this.newBacktest.initialCapital,
       });
 

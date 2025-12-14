@@ -1,4 +1,4 @@
-import { OHLCV } from '../types/ohlcv';
+import { OHLCV, Timeframe, MultiTimeframeData, buildHigherTfIndex } from '../types/ohlcv';
 import {
   IndicatorDefinition,
   StrategySchema,
@@ -8,7 +8,7 @@ import {
 import { Signal, Position } from '../types/trading';
 import { IndicatorResult, MultiLineIndicatorResult, PriceSource, getPrice } from '../types/indicator';
 import { IndicatorRegistry } from '../indicators/registry';
-import { ConditionEvaluator, EvaluationContext } from './condition-evaluator';
+import { EvaluationContext, getConditionEvaluator, ConditionEvaluator } from './condition-evaluator';
 
 /**
  * Stan executora dla każdego symbolu
@@ -44,22 +44,29 @@ export class StrategyExecutor {
   constructor(strategy: StrategySchema) {
     this.strategy = strategy;
     this.indicatorRegistry = IndicatorRegistry.getInstance();
-    this.conditionEvaluator = new ConditionEvaluator();
+    this.conditionEvaluator = getConditionEvaluator();
   }
 
   /**
    * Wykonaj strategię na danych historycznych
    * Zwraca tablicę sygnałów dla każdej świecy
+   * @param data - dane głównego timeframe'u
+   * @param symbol - symbol
+   * @param multiTfData - opcjonalne dane dla innych timeframe'ów
    */
-  execute(data: OHLCV[], symbol: string): ExecutionResult[] {
+  execute(
+    data: OHLCV[],
+    symbol: string,
+    multiTfData?: MultiTimeframeData
+  ): ExecutionResult[] {
     const results: ExecutionResult[] = [];
     let signalCounts = { entry_long: 0, entry_short: 0, exit_long: 0, exit_short: 0, none: 0 };
 
     // Inicjalizuj stan dla symbolu
     this.initializeState(symbol);
 
-    // Oblicz wszystkie wskaźniki
-    const indicators = this.calculateAllIndicators(data);
+    // Oblicz wszystkie wskaźniki (z obsługą multi-timeframe)
+    const indicators = this.calculateAllIndicators(data, multiTfData);
     
     console.log(`[StrategyExecutor] Calculated ${indicators.size} indicators for ${data.length} candles`);
     
@@ -146,11 +153,17 @@ export class StrategyExecutor {
 
   /**
    * Oblicz wszystkie wskaźniki zdefiniowane w strategii
+   * Obsługuje wskaźniki na różnych timeframe'ach
    */
   private calculateAllIndicators(
-    data: OHLCV[]
+    data: OHLCV[],
+    multiTfData?: MultiTimeframeData
   ): Map<string, IndicatorResult[]> {
     const results = new Map<string, IndicatorResult[]>();
+    const primaryTf = this.strategy.dataRequirements.primaryTimeframe;
+
+    // Cache dla indeksów wyższych TF
+    const htfIndexCache = new Map<Timeframe, (OHLCV | null)[]>();
 
     for (const indicatorDef of this.strategy.indicators) {
       const indicator = this.indicatorRegistry.get(indicatorDef.type);
@@ -169,9 +182,53 @@ export class StrategyExecutor {
         continue;
       }
 
-      // Oblicz wskaźnik
-      const values = indicator.calculate(data, indicatorDef.params);
-      results.set(indicatorDef.id, values);
+      // Sprawdź czy wskaźnik jest na innym timeframe
+      const indicatorTf = indicatorDef.timeframe || primaryTf;
+      
+      if (indicatorTf !== primaryTf && multiTfData) {
+        // Wskaźnik na wyższym timeframe
+        const htfData = multiTfData.get(indicatorTf);
+        
+        if (!htfData || htfData.length === 0) {
+          console.warn(`No data for timeframe ${indicatorTf} for indicator ${indicatorDef.id}`);
+          // Wypełnij nullami
+          results.set(indicatorDef.id, data.map(() => null));
+          continue;
+        }
+
+        // Oblicz wskaźnik na danych HTF
+        const htfValues = indicator.calculate(htfData, indicatorDef.params);
+
+        // Zbuduj indeks mapowania (cache)
+        if (!htfIndexCache.has(indicatorTf)) {
+          htfIndexCache.set(indicatorTf, buildHigherTfIndex(data, htfData, indicatorTf));
+        }
+        const htfIndex = htfIndexCache.get(indicatorTf)!;
+
+        // Mapuj wartości HTF na główny timeframe
+        const mappedValues: IndicatorResult[] = [];
+        for (let i = 0; i < data.length; i++) {
+          const htfCandle = htfIndex[i];
+          if (htfCandle) {
+            // Znajdź indeks tej świecy w htfData
+            const htfCandleIndex = htfData.findIndex(c => c.timestamp === htfCandle.timestamp);
+            if (htfCandleIndex >= 0 && htfCandleIndex < htfValues.length) {
+              mappedValues.push(htfValues[htfCandleIndex]);
+            } else {
+              mappedValues.push(null);
+            }
+          } else {
+            mappedValues.push(null);
+          }
+        }
+
+        results.set(indicatorDef.id, mappedValues);
+        console.log(`[StrategyExecutor] Indicator ${indicatorDef.id} calculated on ${indicatorTf} and mapped to ${primaryTf}`);
+      } else {
+        // Wskaźnik na głównym timeframe
+        const values = indicator.calculate(data, indicatorDef.params);
+        results.set(indicatorDef.id, values);
+      }
     }
 
     return results;

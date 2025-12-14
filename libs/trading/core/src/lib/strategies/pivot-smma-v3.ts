@@ -1,28 +1,28 @@
 /**
  * Pivot SMMA v3 Strategy - Single Source of Truth
  *
- * Strategia oparta na:
- * - Odbiciach od poziomów Pivot Points
- * - Filtr trendu SMMA (33/144)
- * - ADX filter (> 20)
- * - Volume filter (> SMA20)
- * - ATR volatility filter (0.8% - 4.5%)
- * - Trend threshold (0.3%)
+ * Filtr kierunku (na TF 1d):
+ * - LONG: gdy cena > smma33_1d AND cena > smma144_1d (uptrend na daily)
+ * - SHORT: gdy cena < smma33_1d AND cena < smma144_1d (downtrend na daily)
  *
- * Ta definicja jest używana zarówno przez CLI jak i API.
+ * Wejścia na pullback/odbicie (na głównym TF):
+ * - LONG: cena < pivot.S1 (pullback do wsparcia)
+ * - SHORT: cena > pivot.R1 (odbicie od oporu)
+ *
+ * Siatka zleceń z uśrednianiem (maxOpenPositions: 20)
  */
 
 import { StrategySchema } from '../types/strategy';
 
 /**
- * Pivot SMMA v3 - pełna strategia z wszystkimi filtrami
+ * Pivot SMMA v3 - strategia z siatką zleceń na pivotach
  */
 export const PIVOT_SMMA_V3_STRATEGY: StrategySchema = {
   id: 'pivot-smma-v3',
-  version: '3.0.0',
-  name: 'Pivot SMMA v3',
+  version: '4.1.0',
+  name: 'Pivot SMMA v4',
   description:
-    'Strategia oparta na odbiciach od poziomów Pivot Points z filtrem trendu SMMA - v3.0 z ADX, Volume, ATR filters',
+    'Filtr trendu na 1d (SMMA 33/144) + wejścia na pivot S1/R1',
   status: 'testing',
   dataRequirements: {
     primaryTimeframe: '4h',
@@ -31,9 +31,11 @@ export const PIVOT_SMMA_V3_STRATEGY: StrategySchema = {
     symbols: ['BTCUSDT'],
   },
   indicators: [
-    // Trend SMMA (33 i 144 jak w analizie)
-    { id: 'smma33', type: 'SMMA', params: { period: 33, source: 'close' } },
-    { id: 'smma144', type: 'SMMA', params: { period: 144, source: 'close' } },
+    // ===== WSKAŹNIKI NA 1D - FILTR KIERUNKU =====
+    { id: 'smma33_1d', type: 'SMMA', params: { period: 33, source: 'close' }, timeframe: '1d' },
+    { id: 'smma144_1d', type: 'SMMA', params: { period: 144, source: 'close' }, timeframe: '1d' },
+    
+    // ===== WSKAŹNIKI NA GŁÓWNYM TF =====
     // RSI filter
     { id: 'rsi', type: 'RSI', params: { period: 14, source: 'close' } },
     // ATR dla SL/TP i volatility filter
@@ -43,34 +45,35 @@ export const PIVOT_SMMA_V3_STRATEGY: StrategySchema = {
     // ADX filter - tylko gdy trend > 20
     { id: 'adx', type: 'ADX', params: { period: 14 } },
     // Volume SMA dla volume filter
-    { id: 'volumeSma', type: 'VOLUME_SMA', params: { period: 20 } },
-    // SMA200 - filtr długoterminowego trendu (nie shortuj w uptrend!)
-    { id: 'sma200', type: 'SMA', params: { period: 200, source: 'close' } },
+    { id: 'volumeSma', type: 'VOLUME_SMA', params: { period: 20 } }
   ],
-  // Computed variables dla trend threshold (0.3%)
+  // Computed variables
   computedVariables: [
-    {
-      id: 'trendDiff',
-      expression: '(smma33 - smma144) / smma144',
-      description: 'Różnica procentowa między SMMA fast i slow',
-    },
     {
       id: 'atrPct',
       expression: 'atr / close',
       description: 'ATR jako procent ceny (volatility filter)',
     },
+    {
+      id: 'trendStrength',
+      expression: '(smma33_1d - smma144_1d) / smma144_1d',
+      description: 'Siła trendu na 1d - różnica między SMMA',
+    },
   ],
   entrySignals: {
     long: {
-      // Warunki wejścia LONG - podstawowe (najlepsza wersja)
+      // LONG: cena NAD SMMA na 1d (uptrend) + pullback do pivot S1
       conditions: {
         operator: 'AND',
         conditions: [
-          // Trend: SMMA33 > SMMA144 (uptrend)
-          { type: 'greater_than', left: 'smma33', right: 'smma144' },
+          // FILTR KIERUNKU NA 1D: cena nad obiema średnimi (uptrend)
+          { type: 'greater_than', left: 'close', right: 'smma33_1d' },
+          { type: 'greater_than', left: 'close', right: 'smma144_1d' },
+          // Wejście: pullback do wsparcia (cena < S1)
+          { type: 'less_than', left: 'close', right: 'pivot.S1' },
           // RSI nie przekupiony
-          { type: 'less_than', left: 'rsi', right: 75 },
-          // RSI nie w oversold
+          { type: 'less_than', left: 'rsi', right: 70 },
+          // RSI nie wyprzedany (momentum ok)
           { type: 'greater_than', left: 'rsi', right: 35 },
         ],
       },
@@ -78,64 +81,54 @@ export const PIVOT_SMMA_V3_STRATEGY: StrategySchema = {
         operator: 'AND',
         conditions: [
           // ATR volatility filter
-          { type: 'greater_than', left: 'atrPct', right: 0.005 },
-          { type: 'less_than', left: 'atrPct', right: 0.06 },
+          { type: 'greater_than', left: 'atrPct', right: 0.003 },
+          { type: 'less_than', left: 'atrPct', right: 0.08 },
         ],
       },
     },
-    // SHORT WYŁĄCZONY w wersji long-only dla bull marketu
-    // Usuń komentarz poniżej żeby włączyć shorty w bear markecie
-    /*
+    // SHORT: cena POD SMMA na 1d (downtrend) + odbicie od pivot R1
     short: {
       conditions: {
         operator: 'AND',
         conditions: [
-          { type: 'less_than', left: 'trendDiff', right: -0.003 },
+          // FILTR KIERUNKU NA 1D: cena pod obiema średnimi (downtrend)
+          { type: 'less_than', left: 'close', right: 'smma33_1d' },
+          { type: 'less_than', left: 'close', right: 'smma144_1d' },
+          // Wejście: odbicie od oporu (cena > R1)
+          { type: 'greater_than', left: 'close', right: 'pivot.R1' },
+          // RSI nie wyprzedany
           { type: 'greater_than', left: 'rsi', right: 30 },
-          { type: 'less_than', left: 'rsi', right: 70 },
-          { type: 'greater_than', left: 'adx.adx', right: 20 },
-          { type: 'less_than', left: 'close', right: 'sma200' },
+          // RSI nie przekupiony
+          { type: 'less_than', left: 'rsi', right: 65 },
         ],
       },
       filters: {
         operator: 'AND',
         conditions: [
-          { type: 'greater_than', left: 'volume', right: 'volumeSma' },
-          { type: 'greater_than', left: 'atrPct', right: 0.008 },
-          { type: 'less_than', left: 'atrPct', right: 0.045 },
-          { type: 'is_falling', left: 'smma33', right: 0 },
+          { type: 'greater_than', left: 'atrPct', right: 0.003 },
+          { type: 'less_than', left: 'atrPct', right: 0.08 },
         ],
       },
     },
-    */
   },
   exitSignals: {
-    stopLoss: {
-      type: 'atr_multiple',
-      value: 1.5, // 1.5x ATR
-      atrPeriod: 14,
-    },
-    takeProfit: {
-      type: 'risk_reward',
-      value: 2.0, // 2R - osiągalne target
-    },
+    // Brak SL/TP - pozycje prowadzone między pivotami
+    // Wyjście następuje gdy zmienia się kierunek trendu na 1d
     trailingStop: {
-      enabled: false, // Wyłączony - idziemy do pełnego TP
+      enabled: false,
     },
   },
   riskManagement: {
-    riskPerTrade: 2, // 2% risk per trade
-    maxPositionSize: 5, // 5% max position
-    maxOpenPositions: 1,
-    maxDailyLoss: 5,
+    riskPerTrade: 0.5, // 0.5% risk per trade (mniejsze bo więcej pozycji)
+    maxPositionSize: 2, // 2% max na pojedynczą pozycję
+    maxOpenPositions: 20, // Siatka zleceń - do 20 pozycji
+    maxDailyLoss: 10, // 10% max dzienna strata
     leverage: 5, // Leverage 5x
   },
   optimizationHints: {
     optimizableParams: [
-      'indicators.smma33.period',
-      'indicators.smma144.period',
-      'exitSignals.stopLoss.value',
-      'exitSignals.takeProfit.value',
+      'indicators.smma33_1d.period',
+      'indicators.smma144_1d.period',
       'riskManagement.riskPerTrade',
     ],
     objectives: ['sharpe', 'profit_factor'],

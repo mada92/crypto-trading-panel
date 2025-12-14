@@ -1,4 +1,4 @@
-import { OHLCV } from '../types/ohlcv';
+import { OHLCV, MultiTimeframeData } from '../types/ohlcv';
 import { StrategySchema } from '../types/strategy';
 import { Trade, EquityPoint, Signal, Position } from '../types/trading';
 import {
@@ -11,6 +11,7 @@ import { StrategyExecutor, ExecutionResult } from './strategy-executor';
 import { MarketSimulator } from './market-simulator';
 import { calculateBacktestMetrics } from './metrics-calculator';
 import { calculateATR } from '../indicators/atr';
+import { getConditionEvaluator } from './condition-evaluator';
 import { randomUUID } from 'crypto';
 
 // Użyj natywnego crypto.randomUUID dla generowania UUID
@@ -34,6 +35,7 @@ export class BacktestEngine {
   private equityCurve: EquityPoint[] = [];
   private currentDrawdown = 0;
   private peakEquity = 0;
+  private debugMode = false;
 
   constructor(strategy: StrategySchema, config: BacktestConfig) {
     this.strategy = strategy;
@@ -43,18 +45,37 @@ export class BacktestEngine {
   }
 
   /**
+   * Włącz debug mode - loguje szczegóły ewaluacji warunków
+   */
+  enableDebug(sampleInterval = 500): void {
+    this.debugMode = true;
+    getConditionEvaluator().setDebugMode(true, sampleInterval);
+    console.log(`[BacktestEngine] Debug mode enabled (logging every ${sampleInterval} candles)`);
+  }
+
+  /**
    * Uruchom backtest
+   * @param data - dane głównego timeframe'u
+   * @param symbol - symbol
+   * @param onProgress - callback progressu
+   * @param multiTfData - opcjonalne dane dla innych timeframe'ów
    */
   async run(
     data: OHLCV[],
     symbol: string,
-    onProgress?: ProgressCallback
+    onProgress?: ProgressCallback,
+    multiTfData?: MultiTimeframeData
   ): Promise<BacktestResult> {
     const backtestId = uuidv4();
     const startTime = Date.now();
 
     // Filtruj dane według zakresu dat
     const filteredData = this.filterDataByDateRange(data);
+    
+    // Filtruj też dane multi-TF
+    const filteredMultiTfData: MultiTimeframeData | undefined = multiTfData 
+      ? this.filterMultiTfData(multiTfData)
+      : undefined;
 
     if (filteredData.length === 0) {
       return this.createErrorResult(
@@ -80,8 +101,8 @@ export class BacktestEngine {
     const atrPeriod = this.strategy.exitSignals.stopLoss?.atrPeriod || 14;
     const atrValues = calculateATR(filteredData, atrPeriod);
 
-    // Wykonaj strategię na wszystkich danych
-    const executionResults = this.executor.execute(filteredData, symbol);
+    // Wykonaj strategię na wszystkich danych (z danymi multi-TF)
+    const executionResults = this.executor.execute(filteredData, symbol, filteredMultiTfData);
 
     // Iteruj po wynikach i symuluj trading
     const totalCandles = executionResults.length;
@@ -247,6 +268,24 @@ export class BacktestEngine {
   }
 
   /**
+   * Filtruj dane multi-TF według zakresu dat
+   */
+  private filterMultiTfData(multiTfData: MultiTimeframeData): MultiTimeframeData {
+    const startTime = this.config.startDate.getTime();
+    const endTime = this.config.endDate.getTime();
+    const filtered: MultiTimeframeData = new Map();
+
+    multiTfData.forEach((data, tf) => {
+      filtered.set(
+        tf,
+        data.filter((candle) => candle.timestamp >= startTime && candle.timestamp <= endTime)
+      );
+    });
+
+    return filtered;
+  }
+
+  /**
    * Oszacuj pozostały czas
    */
   private estimateTimeRemaining(
@@ -314,8 +353,9 @@ export async function runBacktest(
   config: BacktestConfig,
   data: OHLCV[],
   symbol: string,
-  onProgress?: ProgressCallback
+  onProgress?: ProgressCallback,
+  multiTfData?: MultiTimeframeData
 ): Promise<BacktestResult> {
   const engine = new BacktestEngine(strategy, config);
-  return engine.run(data, symbol, onProgress);
+  return engine.run(data, symbol, onProgress, multiTfData);
 }

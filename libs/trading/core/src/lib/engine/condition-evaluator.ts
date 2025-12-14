@@ -38,26 +38,54 @@ export interface EvaluationContext {
  * Evaluator warunków strategii
  */
 export class ConditionEvaluator {
+  private debugMode = false;
+  private debugSampleInterval = 1000; // Loguj co N-tą świecę
+  private evaluationCount = 0;
+
+  /**
+   * Włącz/wyłącz tryb debugowania
+   */
+  setDebugMode(enabled: boolean, sampleInterval = 1000): void {
+    this.debugMode = enabled;
+    this.debugSampleInterval = sampleInterval;
+    this.evaluationCount = 0;
+  }
+
   /**
    * Ewaluuj grupę warunków
    */
-  evaluateGroup(group: ConditionGroup, context: EvaluationContext): boolean {
+  evaluateGroup(group: ConditionGroup, context: EvaluationContext, label = 'conditions'): boolean {
     if (!group.conditions || group.conditions.length === 0) {
       return true; // Brak warunków = zawsze prawda
     }
 
-    const results = group.conditions.map((condition) => {
+    this.evaluationCount++;
+    const shouldLog = this.debugMode && (this.evaluationCount % this.debugSampleInterval === 0);
+
+    const results = group.conditions.map((condition, idx) => {
       if (this.isConditionGroup(condition)) {
-        return this.evaluateGroup(condition, context);
+        return this.evaluateGroup(condition, context, `${label}[${idx}]`);
       }
-      return this.evaluateCondition(condition, context);
+      const result = this.evaluateCondition(condition, context);
+      
+      if (shouldLog) {
+        const leftVal = this.resolveValue(condition.left, context);
+        const rightVal = this.resolveValue(condition.right, context);
+        console.log(`[DEBUG] ${label}[${idx}] ${condition.left}(${leftVal?.toFixed(2)}) ${condition.type} ${condition.right}(${typeof condition.right === 'number' ? condition.right : rightVal?.toFixed(2)}) => ${result}`);
+      }
+      
+      return result;
     });
 
-    if (group.operator === 'AND') {
-      return results.every((r) => r);
-    } else {
-      return results.some((r) => r);
+    const finalResult = group.operator === 'AND' 
+      ? results.every((r) => r)
+      : results.some((r) => r);
+
+    if (shouldLog) {
+      console.log(`[DEBUG] ${label} (${group.operator}): [${results.join(', ')}] => ${finalResult}`);
     }
+
+    return finalResult;
   }
 
   /**

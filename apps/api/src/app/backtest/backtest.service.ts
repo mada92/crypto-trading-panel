@@ -7,6 +7,8 @@ import {
   BacktestResult,
   BacktestProgress,
   OHLCV,
+  Timeframe,
+  MultiTimeframeData,
 } from '@trading-system/core';
 import { StrategiesService } from '../strategies/strategies.service';
 import { MarketDataService } from '../market-data/market-data.service';
@@ -85,7 +87,7 @@ export class BacktestService {
 
     // Get market data
     const symbol = dto.symbol || strategy.dataRequirements.symbols[0] || 'BTCUSDT';
-    const timeframe = strategy.dataRequirements.primaryTimeframe;
+    const timeframe = dto.timeframe || strategy.dataRequirements.primaryTimeframe;
 
     this.logger.log(`Starting backtest for strategy: ${dto.strategyId}`);
     this.logger.log(`Symbol: ${symbol}, Timeframe: ${timeframe}`);
@@ -98,7 +100,7 @@ export class BacktestService {
       config.endDate
     );
 
-    this.logger.log(`Loaded ${data.length} candles`);
+    this.logger.log(`Loaded ${data.length} candles for primary timeframe ${timeframe}`);
 
     if (data.length === 0) {
       throw new BadRequestException(
@@ -112,8 +114,31 @@ export class BacktestService {
       this.logger.debug(`Last candle: ${JSON.stringify(data[data.length - 1])}`);
     }
 
+    // Ładuj dane dla dodatkowych timeframe'ów (jeśli strategia ich wymaga)
+    let multiTfData: MultiTimeframeData | undefined;
+    const additionalTimeframes = strategy.dataRequirements.additionalTimeframes || [];
+    
+    if (additionalTimeframes.length > 0) {
+      multiTfData = new Map();
+      
+      for (const tf of additionalTimeframes) {
+        this.logger.log(`Loading additional timeframe: ${tf}`);
+        const tfData = await this.marketDataService.getHistoricalData(
+          symbol,
+          tf as Timeframe,
+          config.startDate,
+          config.endDate
+        );
+        multiTfData.set(tf as Timeframe, tfData);
+        this.logger.log(`Loaded ${tfData.length} candles for ${tf}`);
+      }
+    }
+
     // Create backtest engine
     const engine = new BacktestEngine(strategy, config);
+    
+    // Enable debug mode to log condition evaluations
+    engine.enableDebug(500);
 
     // Create progress subject
     const progressSubject = new Subject<BacktestProgress>();
@@ -121,7 +146,7 @@ export class BacktestService {
     this.progressSubjects.set(backtestId, progressSubject);
 
     // Run backtest asynchronously
-    this.executeBacktest(engine, data, symbol, backtestId, progressSubject);
+    this.executeBacktest(engine, data, symbol, backtestId, progressSubject, multiTfData);
 
     return {
       backtestId,
@@ -134,14 +159,15 @@ export class BacktestService {
     data: OHLCV[],
     symbol: string,
     backtestId: string,
-    progressSubject: Subject<BacktestProgress>
+    progressSubject: Subject<BacktestProgress>,
+    multiTfData?: MultiTimeframeData
   ): Promise<void> {
     try {
       this.logger.log(`Executing backtest ${backtestId}...`);
       
       const result = await engine.run(data, symbol, (progress) => {
         progressSubject.next(progress);
-      });
+      }, multiTfData);
 
       // Override backtest ID
       result.id = backtestId;

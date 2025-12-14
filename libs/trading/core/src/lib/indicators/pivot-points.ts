@@ -52,16 +52,20 @@ export class PivotPointsIndicator implements IIndicator {
 }
 
 /**
- * Wynik Pivot Points
+ * Wynik Pivot Points (rozszerzone do S5/R5)
  */
 export interface PivotPointsResult extends MultiLineIndicatorResult {
   PP: number | null;
   R1: number | null;
   R2: number | null;
   R3: number | null;
+  R4: number | null;
+  R5: number | null;
   S1: number | null;
   S2: number | null;
   S3: number | null;
+  S4: number | null;
+  S5: number | null;
 }
 
 /**
@@ -74,12 +78,8 @@ export function calculatePivotPoints(data: OHLCV[], method: PivotMethod): PivotP
     if (i === 0) {
       results.push({
         PP: null,
-        R1: null,
-        R2: null,
-        R3: null,
-        S1: null,
-        S2: null,
-        S3: null,
+        R1: null, R2: null, R3: null, R4: null, R5: null,
+        S1: null, S2: null, S3: null, S4: null, S5: null,
       });
       continue;
     }
@@ -120,22 +120,31 @@ export function calculatePivotLevels(
 }
 
 /**
- * Traditional Pivot Points
+ * Traditional Pivot Points (rozszerzone do S5/R5)
  */
 function calculateTraditionalPivots(high: number, low: number, close: number): PivotPointsResult {
   const PP = (high + low + close) / 3;
+  const range = high - low;
+  
+  // Klasyczne poziomy
   const R1 = 2 * PP - low;
   const S1 = 2 * PP - high;
-  const R2 = PP + (high - low);
-  const S2 = PP - (high - low);
+  const R2 = PP + range;
+  const S2 = PP - range;
   const R3 = high + 2 * (PP - low);
   const S3 = low - 2 * (high - PP);
+  
+  // Rozszerzone poziomy (kontynuacja wzoru)
+  const R4 = R3 + range;
+  const S4 = S3 - range;
+  const R5 = R4 + range;
+  const S5 = S4 - range;
 
-  return { PP, R1, R2, R3, S1, S2, S3 };
+  return { PP, R1, R2, R3, R4, R5, S1, S2, S3, S4, S5 };
 }
 
 /**
- * Fibonacci Pivot Points
+ * Fibonacci Pivot Points (rozszerzone do S5/R5)
  */
 function calculateFibonacciPivots(high: number, low: number, close: number): PivotPointsResult {
   const PP = (high + low + close) / 3;
@@ -144,15 +153,19 @@ function calculateFibonacciPivots(high: number, low: number, close: number): Piv
   const R1 = PP + 0.382 * range;
   const R2 = PP + 0.618 * range;
   const R3 = PP + 1.0 * range;
+  const R4 = PP + 1.382 * range;
+  const R5 = PP + 1.618 * range;
   const S1 = PP - 0.382 * range;
   const S2 = PP - 0.618 * range;
   const S3 = PP - 1.0 * range;
+  const S4 = PP - 1.382 * range;
+  const S5 = PP - 1.618 * range;
 
-  return { PP, R1, R2, R3, S1, S2, S3 };
+  return { PP, R1, R2, R3, R4, R5, S1, S2, S3, S4, S5 };
 }
 
 /**
- * Camarilla Pivot Points
+ * Camarilla Pivot Points (rozszerzone do S5/R5)
  */
 function calculateCamarillaPivots(high: number, low: number, close: number): PivotPointsResult {
   const PP = (high + low + close) / 3;
@@ -161,31 +174,40 @@ function calculateCamarillaPivots(high: number, low: number, close: number): Piv
   const R1 = close + (range * 1.1) / 12;
   const R2 = close + (range * 1.1) / 6;
   const R3 = close + (range * 1.1) / 4;
+  const R4 = close + (range * 1.1) / 2;
+  const R5 = close + (range * 1.1) * 0.75;
   const S1 = close - (range * 1.1) / 12;
   const S2 = close - (range * 1.1) / 6;
   const S3 = close - (range * 1.1) / 4;
+  const S4 = close - (range * 1.1) / 2;
+  const S5 = close - (range * 1.1) * 0.75;
 
-  return { PP, R1, R2, R3, S1, S2, S3 };
+  return { PP, R1, R2, R3, R4, R5, S1, S2, S3, S4, S5 };
 }
 
 /**
- * Woodie Pivot Points
+ * Woodie Pivot Points (rozszerzone do S5/R5)
  */
 function calculateWoodiePivots(high: number, low: number, close: number): PivotPointsResult {
   const PP = (high + low + 2 * close) / 4;
+  const range = high - low;
 
   const R1 = 2 * PP - low;
-  const R2 = PP + (high - low);
-  const R3 = R1 + (high - low);
+  const R2 = PP + range;
+  const R3 = R1 + range;
+  const R4 = R2 + range;
+  const R5 = R3 + range;
   const S1 = 2 * PP - high;
-  const S2 = PP - (high - low);
-  const S3 = S1 - (high - low);
+  const S2 = PP - range;
+  const S3 = S1 - range;
+  const S4 = S2 - range;
+  const S5 = S3 - range;
 
-  return { PP, R1, R2, R3, S1, S2, S3 };
+  return { PP, R1, R2, R3, R4, R5, S1, S2, S3, S4, S5 };
 }
 
 /**
- * DeMark Pivot Points
+ * DeMark Pivot Points (tylko R1/S1, reszta null)
  */
 function calculateDemarkPivots(
   high: number,
@@ -209,11 +231,7 @@ function calculateDemarkPivots(
 
   return {
     PP,
-    R1,
-    R2: null, // DeMark nie definiuje R2/R3/S2/S3
-    R3: null,
-    S1,
-    S2: null,
-    S3: null,
+    R1, R2: null, R3: null, R4: null, R5: null,
+    S1, S2: null, S3: null, S4: null, S5: null,
   };
 }
